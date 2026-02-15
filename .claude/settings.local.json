@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__list_edge_functions",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__get_publishable_keys",
+      "WebSearch",
+      "mcp__supabase__search_docs",
+      "Bash(python3 -c \" import json, sys data = json.load\\(sys.stdin\\) for item in data: if ''text'' in item: parsed = json.loads\\(item[''text'']\\) nodes = parsed.get\\(''data'',{}\\).get\\(''searchDocs'',{}\\).get\\(''nodes'',[]\\) for n in nodes: print\\(''=== TITLE:'', n.get\\(''title'',''''\\)\\) print\\(''HREF:'', n.get\\(''href'',''''\\)\\) content = n.get\\(''content'',''''\\) # Print first 500 chars of content print\\(''CONTENT \\(first 500\\):'', content[:500]\\) subs = n.get\\(''subsections'',{}\\).get\\(''nodes'',[]\\) if n.get\\(''subsections''\\) else [] for s in subs: print\\('' SUB:'', s.get\\(''title'',''''\\)\\) print\\(\\) \")",
+      "Bash(python3:*)",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__get_advisors",
+      "Bash(npm install:*)",
+      "Bash(npx vue-tsc:*)",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__deploy_edge_function",
+      "Bash(npm run build:*)",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__get_edge_function",
+      "Bash(npx vite build:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
+}

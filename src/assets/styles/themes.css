@@ -1,0 +1,81 @@
+/* =============================================
+   Acta Themes - CSS Custom Properties
+   Use --c-* prefix to avoid conflict with Tailwind v4's --color-* namespace
+   ============================================= */
+
+:root,
+.theme-light {
+  --c-bg-primary: 255 255 255;
+  --c-bg-secondary: 248 249 250;
+  --c-bg-tertiary: 241 243 245;
+  --c-bg-sidebar: 238 240 243;
+  --c-bg-hover: 241 243 245;
+  --c-bg-active: 232 236 239;
+  --c-text-primary: 33 37 41;
+  --c-text-secondary: 108 117 125;
+  --c-text-muted: 173 181 189;
+  --c-border: 222 226 230;
+  --c-accent: 59 130 246;
+  --c-accent-hover: 37 99 235;
+  --c-danger: 239 68 68;
+  --c-success: 34 197 94;
+  --c-star: 250 204 21;
+  --c-unread-badge: 59 130 246;
+}
+
+.theme-dark {
+  --c-bg-primary: 24 24 27;
+  --c-bg-secondary: 39 39 42;
+  --c-bg-tertiary: 63 63 70;
+  --c-bg-sidebar: 17 17 20;
+  --c-bg-hover: 39 39 42;
+  --c-bg-active: 63 63 70;
+  --c-text-primary: 244 244 245;
+  --c-text-secondary: 161 161 170;
+  --c-text-muted: 113 113 122;
+  --c-border: 63 63 70;
+  --c-accent: 96 165 250;
+  --c-accent-hover: 59 130 246;
+  --c-danger: 248 113 113;
+  --c-success: 74 222 128;
+  --c-star: 250 204 21;
+  --c-unread-badge: 96 165 250;
+}
+
+.theme-midnight {
+  --c-bg-primary: 15 23 42;
+  --c-bg-secondary: 30 41 59;
+  --c-bg-tertiary: 51 65 85;
+  --c-bg-sidebar: 10 17 34;
+  --c-bg-hover: 30 41 59;
+  --c-bg-active: 51 65 85;
+  --c-text-primary: 226 232 240;
+  --c-text-secondary: 148 163 184;
+  --c-text-muted: 100 116 139;
+  --c-border: 51 65 85;
+  --c-accent: 167 139 250;
+  --c-accent-hover: 139 92 246;
+  --c-danger: 251 113 133;
+  --c-success: 74 222 128;
+  --c-star: 251 191 36;
+  --c-unread-badge: 167 139 250;
+}
+
+.theme-forest {
+  --c-bg-primary: 20 26 22;
+  --c-bg-secondary: 30 40 33;
+  --c-bg-tertiary: 45 58 48;
+  --c-bg-sidebar: 14 19 16;
+  --c-bg-hover: 30 40 33;
+  --c-bg-active: 45 58 48;
+  --c-text-primary: 220 230 222;
+  --c-text-secondary: 156 175 160;
+  --c-text-muted: 106 125 110;
+  --c-border: 55 70 58;
+  --c-accent: 74 222 128;
+  --c-accent-hover: 34 197 94;
+  --c-danger: 248 113 113;
+  --c-success: 74 222 128;
+  --c-star: 250 204 21;
+  --c-unread-badge: 74 222 128;
+}

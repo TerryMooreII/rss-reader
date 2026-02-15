@@ -1,0 +1,162 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useEntryStore } from '@/stores/entries'
+import { useUIStore } from '@/stores/ui'
+import DOMPurify from 'dompurify'
+import {
+  ArrowTopRightOnSquareIcon,
+  StarIcon as StarOutline,
+  ShareIcon,
+  XMarkIcon,
+} from '@heroicons/vue/24/outline'
+import { StarIcon as StarSolid } from '@heroicons/vue/24/solid'
+
+const entryStore = useEntryStore()
+const ui = useUIStore()
+
+const entry = computed(() => entryStore.selectedEntry)
+
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+const sanitizedContent = computed(() => {
+  if (!entry.value) return ''
+  let html = entry.value.content_html || entry.value.summary || ''
+  // Decode XML entities for feeds that entity-encode their HTML content
+  if (html.includes('&lt;') || html.includes('&gt;')) {
+    html = decodeXmlEntities(html)
+  }
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ['iframe'],
+    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'srcset', 'sizes', 'loading'],
+  })
+})
+
+const timeAgo = computed(() => {
+  if (!entry.value?.published_at) return ''
+  const date = new Date(entry.value.published_at)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+})
+
+const isStarred = computed(() => !!entry.value?.starred_at)
+
+function toggleStar() {
+  if (entry.value) entryStore.toggleStar(entry.value.id)
+}
+
+function openExternal() {
+  if (entry.value?.url) window.open(entry.value.url, '_blank')
+}
+
+function shareLink() {
+  if (entry.value?.url) {
+    navigator.clipboard.writeText(entry.value.url)
+  }
+}
+</script>
+
+<template>
+  <div v-if="entry" class="flex h-full flex-col overflow-hidden bg-bg-primary">
+    <!-- Toolbar -->
+    <div class="flex items-center justify-between border-b px-4 py-2 shrink-0">
+      <div class="flex items-center gap-2">
+        <button class="btn-ghost text-xs gap-1" @click="openExternal">
+          <ArrowTopRightOnSquareIcon class="h-4 w-4" />
+          Open
+        </button>
+        <button class="btn-ghost text-xs gap-1" @click="toggleStar">
+          <StarSolid v-if="isStarred" class="h-4 w-4 text-star" />
+          <StarOutline v-else class="h-4 w-4" />
+          Star
+        </button>
+        <button class="btn-ghost text-xs gap-1" @click="shareLink">
+          <ShareIcon class="h-4 w-4" />
+          Share
+        </button>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn-ghost text-xs gap-1" @click="entryStore.selectEntry(null)">
+          <XMarkIcon class="h-4 w-4" />
+          Close
+        </button>
+      </div>
+    </div>
+
+    <!-- Article content -->
+    <div class="flex-1 overflow-y-auto px-6 py-6 md:px-10 md:py-8">
+      <article class="mx-auto max-w-2xl">
+        <!-- Feed info -->
+        <div class="mb-4 flex items-center gap-2 text-xs text-text-muted">
+          <img
+            v-if="entry.feed_favicon_url"
+            :src="entry.feed_favicon_url"
+            alt=""
+            class="h-4 w-4 rounded"
+          />
+          <span class="font-medium text-accent">{{ entry.feed_title }}</span>
+          <span v-if="entry.author">&middot; {{ entry.author }}</span>
+        </div>
+
+        <!-- Title -->
+        <h1 class="text-2xl font-bold leading-tight text-text-primary mb-2">
+          {{ entry.title || 'Untitled' }}
+        </h1>
+
+        <!-- Date -->
+        <p class="text-sm text-text-muted mb-6">{{ timeAgo }}</p>
+
+        <!-- Featured image -->
+        <img
+          v-if="entry.image_url"
+          :src="entry.image_url"
+          :alt="entry.title || ''"
+          class="w-full rounded-lg mb-6"
+          loading="lazy"
+          @error="($event.target as HTMLImageElement).style.display = 'none'"
+        />
+
+        <!-- Content -->
+        <div
+          class="prose prose-sm max-w-none
+            prose-headings:text-text-primary
+            prose-p:text-text-primary
+            prose-a:text-accent prose-a:no-underline hover:prose-a:underline
+            prose-strong:text-text-primary
+            prose-code:text-accent prose-code:bg-bg-secondary prose-code:rounded prose-code:px-1
+            prose-blockquote:border-accent prose-blockquote:text-text-secondary
+            prose-img:rounded-lg"
+          v-html="sanitizedContent"
+        />
+
+        <!-- Show more link -->
+        <div v-if="entry.url" class="mt-8 border-t pt-4">
+          <a
+            :href="entry.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-sm font-medium text-accent hover:underline"
+          >
+            Read full article &rarr;
+          </a>
+        </div>
+      </article>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div v-else class="flex h-full items-center justify-center text-text-muted">
+    <p class="text-sm">Select an entry to read</p>
+  </div>
+</template>
