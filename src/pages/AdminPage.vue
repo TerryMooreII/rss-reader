@@ -1,6 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Bars3Icon, PlusIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
+import { ref, computed, watch, onMounted } from 'vue'
+import {
+  Bars3Icon,
+  PlusIcon,
+  ArrowUpTrayIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  RssIcon,
+} from '@heroicons/vue/24/outline'
 import { supabase } from '@/config/supabase'
 import { useUIStore } from '@/stores/ui'
 import { useNotificationStore } from '@/stores/notifications'
@@ -11,10 +20,58 @@ import type { UserProfile, Feed } from '@/types/models'
 const ui = useUIStore()
 const notifications = useNotificationStore()
 
-const activeTab = ref<'feeds' | 'users'>('feeds')
+const activeTab = ref<'feeds' | 'users' | 'cron'>('feeds')
 const feeds = ref<Feed[]>([])
 const users = ref<UserProfile[]>([])
 const loading = ref(false)
+
+// Feed table controls
+const categoryFilter = ref('')
+const sortColumn = ref<string>('created_at')
+const sortAsc = ref(false)
+const pageSize = ref(25)
+const currentPage = ref(1)
+const totalFeeds = ref(0)
+const faviconErrors = ref(new Set<string>())
+
+const totalPages = computed(() => Math.max(1, Math.ceil(totalFeeds.value / pageSize.value)))
+
+// Reset to page 1 when filter, sort, or page size changes
+watch([categoryFilter, sortColumn, sortAsc, pageSize], () => {
+  currentPage.value = 1
+  loadFeeds()
+})
+
+watch(currentPage, () => {
+  loadFeeds()
+})
+
+type SortableColumn = 'title' | 'category' | 'status' | 'subscriber_count' | 'last_fetched_at' | 'consecutive_failures' | 'created_at'
+
+function toggleSort(column: SortableColumn) {
+  if (sortColumn.value === column) {
+    sortAsc.value = !sortAsc.value
+  } else {
+    sortColumn.value = column
+    sortAsc.value = true
+  }
+}
+
+const categoryLabel = computed(() => {
+  const map = new Map(FEED_CATEGORIES.map((c) => [c.value, c.label]))
+  return (val: string) => map.get(val) ?? val
+})
+
+interface CronRun {
+  run_id: number
+  job_name: string
+  status: string
+  return_message: string | null
+  start_time: string
+  end_time: string
+  duration_ms: number
+}
+const cronRuns = ref<CronRun[]>([])
 
 // Admin import state
 const importUrl = ref('')
@@ -23,14 +80,42 @@ const importLoading = ref(false)
 const opmlFile = ref<File | null>(null)
 const opmlLoading = ref(false)
 
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return 'Never'
+  const now = Date.now()
+  const then = new Date(dateStr).getTime()
+  const diffMs = now - then
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'Just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDays = Math.floor(diffHr / 24)
+  return `${diffDays}d ago`
+}
+
 async function loadFeeds() {
   loading.value = true
-  const { data, error } = await supabase
-    .from('feeds')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(100)
-  if (!error) feeds.value = (data || []) as Feed[]
+
+  let query = supabase.from('feeds').select('*', { count: 'exact' })
+
+  if (categoryFilter.value) {
+    query = query.eq('category', categoryFilter.value)
+  }
+
+  const from = (currentPage.value - 1) * pageSize.value
+  const to = from + pageSize.value - 1
+
+  query = query
+    .order(sortColumn.value, { ascending: sortAsc.value })
+    .range(from, to)
+
+  const { data, error, count } = await query
+
+  if (!error) {
+    feeds.value = (data || []) as Feed[]
+    totalFeeds.value = count ?? 0
+  }
   loading.value = false
 }
 
@@ -106,6 +191,11 @@ function onOpmlFileChange(e: Event) {
   opmlFile.value = input.files?.[0] || null
 }
 
+async function loadCronHistory() {
+  const { data, error } = await supabase.rpc('get_cron_run_history', { p_limit: 50 })
+  if (!error) cronRuns.value = (data || []) as CronRun[]
+}
+
 async function handleAdminImportOPML() {
   if (!opmlFile.value) return
   opmlLoading.value = true
@@ -126,6 +216,7 @@ async function handleAdminImportOPML() {
 onMounted(() => {
   loadFeeds()
   loadUsers()
+  loadCronHistory()
 })
 </script>
 
@@ -145,7 +236,7 @@ onMounted(() => {
       <!-- Stats -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div class="rounded-lg border bg-bg-secondary p-4">
-          <p class="text-2xl font-bold text-text-primary">{{ feeds.length }}</p>
+          <p class="text-2xl font-bold text-text-primary">{{ totalFeeds }}</p>
           <p class="text-xs text-text-muted">Total Feeds</p>
         </div>
         <div class="rounded-lg border bg-bg-secondary p-4">
@@ -249,67 +340,229 @@ onMounted(() => {
         >
           Users
         </button>
+        <button
+          class="px-3 py-2 text-sm font-medium border-b-2 transition-colors"
+          :class="
+            activeTab === 'cron'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-text-secondary'
+          "
+          @click="activeTab = 'cron'"
+        >
+          Cron Jobs
+        </button>
       </div>
 
       <!-- Feeds Table -->
-      <div v-if="activeTab === 'feeds'" class="overflow-x-auto">
+      <div v-if="activeTab === 'feeds'">
+        <!-- Filter & page size controls -->
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-medium text-text-secondary">Category</label>
+            <select v-model="categoryFilter" class="input text-sm py-1 w-44">
+              <option value="">All Categories</option>
+              <option v-for="cat in FEED_CATEGORIES" :key="cat.value" :value="cat.value">
+                {{ cat.label }}
+              </option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2 ml-auto">
+            <label class="text-xs font-medium text-text-secondary">Per page</label>
+            <select v-model="pageSize" class="input text-sm py-1 w-20">
+              <option :value="25">25</option>
+              <option :value="50">50</option>
+              <option :value="100">100</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b text-left text-text-muted">
+                <th class="pb-2 font-medium cursor-pointer select-none" @click="toggleSort('title')">
+                  <span class="inline-flex items-center gap-1">
+                    Feed
+                    <ChevronUpIcon v-if="sortColumn === 'title' && sortAsc" class="h-3 w-3" />
+                    <ChevronDownIcon v-else-if="sortColumn === 'title' && !sortAsc" class="h-3 w-3" />
+                  </span>
+                </th>
+                <th class="pb-2 font-medium cursor-pointer select-none" @click="toggleSort('category')">
+                  <span class="inline-flex items-center gap-1">
+                    Category
+                    <ChevronUpIcon v-if="sortColumn === 'category' && sortAsc" class="h-3 w-3" />
+                    <ChevronDownIcon v-else-if="sortColumn === 'category' && !sortAsc" class="h-3 w-3" />
+                  </span>
+                </th>
+                <th class="pb-2 font-medium cursor-pointer select-none" @click="toggleSort('status')">
+                  <span class="inline-flex items-center gap-1">
+                    Status
+                    <ChevronUpIcon v-if="sortColumn === 'status' && sortAsc" class="h-3 w-3" />
+                    <ChevronDownIcon v-else-if="sortColumn === 'status' && !sortAsc" class="h-3 w-3" />
+                  </span>
+                </th>
+                <th class="pb-2 font-medium cursor-pointer select-none" @click="toggleSort('subscriber_count')">
+                  <span class="inline-flex items-center gap-1">
+                    Subs
+                    <ChevronUpIcon v-if="sortColumn === 'subscriber_count' && sortAsc" class="h-3 w-3" />
+                    <ChevronDownIcon v-else-if="sortColumn === 'subscriber_count' && !sortAsc" class="h-3 w-3" />
+                  </span>
+                </th>
+                <th class="pb-2 font-medium cursor-pointer select-none" @click="toggleSort('last_fetched_at')">
+                  <span class="inline-flex items-center gap-1">
+                    Last Fetched
+                    <ChevronUpIcon v-if="sortColumn === 'last_fetched_at' && sortAsc" class="h-3 w-3" />
+                    <ChevronDownIcon v-else-if="sortColumn === 'last_fetched_at' && !sortAsc" class="h-3 w-3" />
+                  </span>
+                </th>
+                <th class="pb-2 font-medium cursor-pointer select-none" @click="toggleSort('consecutive_failures')">
+                  <span class="inline-flex items-center gap-1">
+                    Failures
+                    <ChevronUpIcon v-if="sortColumn === 'consecutive_failures' && sortAsc" class="h-3 w-3" />
+                    <ChevronDownIcon v-else-if="sortColumn === 'consecutive_failures' && !sortAsc" class="h-3 w-3" />
+                  </span>
+                </th>
+                <th class="pb-2 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading">
+                <td colspan="7" class="py-8 text-center text-text-muted">Loading...</td>
+              </tr>
+              <tr v-else-if="feeds.length === 0">
+                <td colspan="7" class="py-8 text-center text-text-muted">No feeds found</td>
+              </tr>
+              <tr v-for="feed in feeds" v-else :key="feed.id" class="border-b last:border-0">
+                <td class="py-2 pr-4">
+                  <div class="flex items-center gap-2">
+                    <img
+                      v-if="feed.favicon_url && !faviconErrors.has(feed.id)"
+                      :src="feed.favicon_url"
+                      alt=""
+                      class="h-4 w-4 rounded"
+                      @error="faviconErrors.add(feed.id)"
+                    />
+                    <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" />
+                    <div class="min-w-0">
+                      <p class="truncate font-medium text-text-primary max-w-xs">
+                        {{ feed.title || feed.url }}
+                      </p>
+                      <p class="truncate text-xs text-text-muted max-w-xs">{{ feed.url }}</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-2 pr-4 text-text-muted text-xs">
+                  {{ categoryLabel(feed.category) }}
+                </td>
+                <td class="py-2 pr-4">
+                  <span
+                    class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+                    :class="{
+                      'bg-success/10 text-success': feed.status === 'active',
+                      'bg-star/10 text-star': feed.status === 'paused',
+                      'bg-danger/10 text-danger':
+                        feed.status === 'error' || feed.status === 'dead',
+                    }"
+                  >
+                    {{ feed.status }}
+                  </span>
+                </td>
+                <td class="py-2 pr-4 text-text-muted">{{ feed.subscriber_count }}</td>
+                <td class="py-2 pr-4 text-text-muted" :title="feed.last_fetched_at ? new Date(feed.last_fetched_at).toLocaleString() : 'Never fetched'">
+                  {{ timeAgo(feed.last_fetched_at) }}
+                </td>
+                <td class="py-2 pr-4 text-text-muted">{{ feed.consecutive_failures }}</td>
+                <td class="py-2">
+                  <div class="flex gap-2">
+                    <select
+                      class="input text-xs py-1 w-24"
+                      :value="feed.status"
+                      @change="updateFeedStatus(feed, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="active">Active</option>
+                      <option value="paused">Paused</option>
+                      <option value="error">Error</option>
+                      <option value="dead">Dead</option>
+                    </select>
+                    <button class="btn-danger text-xs py-1 px-2" @click="deleteFeed(feed.id)">
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4 pt-4 border-t">
+          <p class="text-xs text-text-muted">
+            {{ totalFeeds === 0 ? 'No feeds' : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, totalFeeds)} of ${totalFeeds} feeds` }}
+          </p>
+          <div class="flex items-center gap-1">
+            <button
+              class="rounded-md p-1.5 text-text-muted hover:bg-bg-hover disabled:opacity-30 disabled:cursor-not-allowed"
+              :disabled="currentPage <= 1"
+              @click="currentPage--"
+            >
+              <ChevronLeftIcon class="h-4 w-4" />
+            </button>
+            <span class="px-2 text-sm text-text-secondary">
+              Page {{ currentPage }} of {{ totalPages }}
+            </span>
+            <button
+              class="rounded-md p-1.5 text-text-muted hover:bg-bg-hover disabled:opacity-30 disabled:cursor-not-allowed"
+              :disabled="currentPage >= totalPages"
+              @click="currentPage++"
+            >
+              <ChevronRightIcon class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cron Jobs Table -->
+      <div v-if="activeTab === 'cron'" class="overflow-x-auto">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs text-text-muted">Last {{ cronRuns.length }} cron executions</p>
+          <button class="btn-ghost text-xs" @click="loadCronHistory">Refresh</button>
+        </div>
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b text-left text-text-muted">
-              <th class="pb-2 font-medium">Feed</th>
+              <th class="pb-2 font-medium">Job</th>
               <th class="pb-2 font-medium">Status</th>
-              <th class="pb-2 font-medium">Failures</th>
-              <th class="pb-2 font-medium">Actions</th>
+              <th class="pb-2 font-medium">Time</th>
+              <th class="pb-2 font-medium">Duration</th>
+              <th class="pb-2 font-medium">Message</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="feed in feeds" :key="feed.id" class="border-b last:border-0">
-              <td class="py-2 pr-4">
-                <div class="flex items-center gap-2">
-                  <img
-                    v-if="feed.favicon_url"
-                    :src="feed.favicon_url"
-                    alt=""
-                    class="h-4 w-4 rounded"
-                  />
-                  <div class="min-w-0">
-                    <p class="truncate font-medium text-text-primary max-w-xs">
-                      {{ feed.title || feed.url }}
-                    </p>
-                    <p class="truncate text-xs text-text-muted max-w-xs">{{ feed.url }}</p>
-                  </div>
-                </div>
-              </td>
+            <tr v-if="cronRuns.length === 0">
+              <td colspan="5" class="py-4 text-center text-text-muted">No cron runs yet</td>
+            </tr>
+            <tr v-for="run in cronRuns" :key="run.run_id" class="border-b last:border-0">
+              <td class="py-2 pr-4 font-medium text-text-primary">{{ run.job_name }}</td>
               <td class="py-2 pr-4">
                 <span
                   class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                   :class="{
-                    'bg-success/10 text-success': feed.status === 'active',
-                    'bg-star/10 text-star': feed.status === 'paused',
-                    'bg-danger/10 text-danger':
-                      feed.status === 'error' || feed.status === 'dead',
+                    'bg-success/10 text-success': run.status === 'succeeded',
+                    'bg-danger/10 text-danger': run.status === 'failed',
+                    'bg-star/10 text-star': run.status !== 'succeeded' && run.status !== 'failed',
                   }"
                 >
-                  {{ feed.status }}
+                  {{ run.status }}
                 </span>
               </td>
-              <td class="py-2 pr-4 text-text-muted">{{ feed.consecutive_failures }}</td>
-              <td class="py-2">
-                <div class="flex gap-2">
-                  <select
-                    class="input text-xs py-1 w-24"
-                    :value="feed.status"
-                    @change="updateFeedStatus(feed, ($event.target as HTMLSelectElement).value)"
-                  >
-                    <option value="active">Active</option>
-                    <option value="paused">Paused</option>
-                    <option value="error">Error</option>
-                    <option value="dead">Dead</option>
-                  </select>
-                  <button class="btn-danger text-xs py-1 px-2" @click="deleteFeed(feed.id)">
-                    Delete
-                  </button>
-                </div>
+              <td class="py-2 pr-4 text-text-muted" :title="new Date(run.start_time).toLocaleString()">
+                {{ timeAgo(run.start_time) }}
+              </td>
+              <td class="py-2 pr-4 text-text-muted">
+                {{ run.duration_ms != null ? `${Math.round(run.duration_ms)}ms` : '-' }}
+              </td>
+              <td class="py-2 text-text-muted truncate max-w-xs">
+                {{ run.return_message || '-' }}
               </td>
             </tr>
           </tbody>

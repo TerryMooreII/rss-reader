@@ -89,6 +89,16 @@ export const useEntryStore = defineStore('entries', () => {
         }
         break
 
+      case 'category':
+        rpcName = 'get_category_entries'
+        params.p_category = f.category
+        params.p_unread_only = f.unreadOnly
+        if (cursor) {
+          params.p_cursor_published_at = cursor.published_at
+          params.p_cursor_id = cursor.id
+        }
+        break
+
       case 'starred':
         rpcName = 'get_starred_entries'
         // starred uses p_cursor_starred_at, no p_unread_only
@@ -288,6 +298,10 @@ export const useEntryStore = defineStore('entries', () => {
         case 'group':
           rpcName = 'mark_group_as_read'
           params.p_group_id = filter.value.groupId
+          break
+        case 'category':
+          rpcName = 'mark_category_as_read'
+          params.p_category = filter.value.category
           break
         default:
           rpcName = 'mark_all_as_read'

@@ -14,7 +14,7 @@ export interface UserSettings {
   user_id: string
   theme: 'light' | 'dark' | 'system'
   custom_theme: string
-  display_mode: 'comfortable' | 'compact'
+  display_mode: 'comfortable' | 'compact' | 'feed'
   entries_per_page: number
   mark_read_on_scroll: boolean
   show_images: boolean
@@ -42,6 +42,7 @@ export interface Feed {
   fetch_interval_minutes: number
   consecutive_failures: number
   last_error_message: string | null
+  subscriber_count: number
   created_at: string
   updated_at: string
 }
@@ -102,9 +103,10 @@ export interface Entry {
 }
 
 export interface EntryFilter {
-  type: 'all' | 'starred' | 'feed' | 'group' | 'search'
+  type: 'all' | 'starred' | 'feed' | 'group' | 'category' | 'search'
   feedId?: string
   groupId?: string
+  category?: string
   query?: string
   unreadOnly: boolean
 }

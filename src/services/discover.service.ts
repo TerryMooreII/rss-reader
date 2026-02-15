@@ -13,33 +13,16 @@ export async function getFeedsByCategory(
 ): Promise<DiscoverFeed[]> {
   const { data, error } = await supabase
     .from('feeds')
-    .select(`
-      id,
-      url,
-      title,
-      description,
-      site_url,
-      favicon_url,
-      category,
-      subscriptions(count)
-    `)
+    .select('id, url, title, description, site_url, favicon_url, category, subscriber_count')
     .eq('is_private', false)
     .eq('category', category)
     .eq('status', 'active')
+    .order('subscriber_count', { ascending: false })
+    .order('title', { ascending: true })
     .range(offset, offset + limit - 1)
 
   if (error) throw error
-
-  return (data ?? []).map((feed: any) => ({
-    id: feed.id,
-    url: feed.url,
-    title: feed.title,
-    description: feed.description,
-    site_url: feed.site_url,
-    favicon_url: feed.favicon_url,
-    category: feed.category,
-    subscriber_count: feed.subscriptions?.[0]?.count ?? 0,
-  }))
+  return (data ?? []) as DiscoverFeed[]
 }
 
 export async function getPopularFeeds(
@@ -47,39 +30,15 @@ export async function getPopularFeeds(
 ): Promise<DiscoverFeed[]> {
   const { data, error } = await supabase
     .from('feeds')
-    .select(`
-      id,
-      url,
-      title,
-      description,
-      site_url,
-      favicon_url,
-      category,
-      subscriptions(count)
-    `)
+    .select('id, url, title, description, site_url, favicon_url, category, subscriber_count')
     .eq('is_private', false)
     .eq('status', 'active')
+    .order('subscriber_count', { ascending: false })
+    .order('title', { ascending: true })
     .limit(limit)
 
   if (error) throw error
-
-  // Map and sort by subscriber count descending (client-side sort since
-  // Supabase doesn't support ordering by aggregated relation counts directly)
-  return (data ?? [])
-    .map((feed: any) => ({
-      id: feed.id,
-      url: feed.url,
-      title: feed.title,
-      description: feed.description,
-      site_url: feed.site_url,
-      favicon_url: feed.favicon_url,
-      category: feed.category,
-      subscriber_count: feed.subscriptions?.[0]?.count ?? 0,
-    }))
-    .sort(
-      (a: DiscoverFeed, b: DiscoverFeed) =>
-        b.subscriber_count - a.subscriber_count,
-    )
+  return (data ?? []) as DiscoverFeed[]
 }
 
 export async function searchGlobalFeeds(
@@ -87,31 +46,13 @@ export async function searchGlobalFeeds(
 ): Promise<DiscoverFeed[]> {
   const { data, error } = await supabase
     .from('feeds')
-    .select(`
-      id,
-      url,
-      title,
-      description,
-      site_url,
-      favicon_url,
-      category,
-      subscriptions(count)
-    `)
+    .select('id, url, title, description, site_url, favicon_url, category, subscriber_count')
     .eq('is_private', false)
     .eq('status', 'active')
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
+    .order('subscriber_count', { ascending: false })
     .limit(30)
 
   if (error) throw error
-
-  return (data ?? []).map((feed: any) => ({
-    id: feed.id,
-    url: feed.url,
-    title: feed.title,
-    description: feed.description,
-    site_url: feed.site_url,
-    favicon_url: feed.favicon_url,
-    category: feed.category,
-    subscriber_count: feed.subscriptions?.[0]?.count ?? 0,
-  }))
+  return (data ?? []) as DiscoverFeed[]
 }

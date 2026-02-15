@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useEntryStore } from '@/stores/entries'
 import EntryListHeader from './EntryListHeader.vue'
@@ -12,6 +12,9 @@ const ui = useUIStore()
 const entryStore = useEntryStore()
 
 const dragging = ref(false)
+
+const isFeedMode = computed(() => ui.displayMode === 'feed')
+const showReader = computed(() => ui.readerOpen && !isFeedMode.value)
 
 function onPointerDown(e: PointerEvent) {
   dragging.value = true
@@ -37,17 +40,20 @@ function onPointerUp() {
   <div class="flex h-full overflow-hidden">
     <!-- Entry list pane -->
     <div
-      class="flex flex-col border-r border-border shrink-0"
-      :class="ui.readerOpen ? 'hidden md:flex' : 'flex-1'"
-      :style="ui.readerOpen ? { width: ui.listWidth + 'px' } : undefined"
+      class="flex flex-col shrink-0"
+      :class="[
+        showReader ? 'hidden md:flex border-r border-border' : 'flex-1',
+        !isFeedMode ? 'border-r border-border' : '',
+      ]"
+      :style="showReader ? { width: ui.listWidth + 'px' } : undefined"
     >
       <EntryListHeader :title="title" />
       <EntryList />
     </div>
 
-    <!-- Resize handle (desktop only, when reader is open) -->
+    <!-- Resize handle (desktop only, when reader is open, not in feed mode) -->
     <div
-      v-if="ui.readerOpen"
+      v-if="showReader"
       class="hidden md:flex w-1 shrink-0 cursor-col-resize items-center justify-center
         hover:bg-accent/20 active:bg-accent/30 transition-colors"
       :class="dragging ? 'bg-accent/30' : ''"
@@ -57,16 +63,16 @@ function onPointerUp() {
       @pointercancel="onPointerUp"
     />
 
-    <!-- Reader pane (desktop) -->
-    <div v-if="ui.readerOpen" class="flex-1 hidden md:block min-w-0">
+    <!-- Reader pane (desktop, not in feed mode) -->
+    <div v-if="showReader" class="flex-1 hidden md:block min-w-0">
       <EntryReader />
     </div>
 
-    <!-- Reader overlay (mobile) -->
+    <!-- Reader overlay (mobile, not in feed mode) -->
     <Teleport to="body">
       <Transition name="slide-right">
         <div
-          v-if="ui.readerOpen && entryStore.selectedEntry"
+          v-if="showReader && entryStore.selectedEntry"
           class="fixed inset-0 z-50 bg-bg-primary md:hidden"
         >
           <EntryReader />

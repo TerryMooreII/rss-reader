@@ -3,7 +3,6 @@ import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useFeedStore } from '@/stores/feeds'
-import { useGroupStore } from '@/stores/groups'
 import { useEntryStore } from '@/stores/entries'
 import { useAuthStore } from '@/stores/auth'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
@@ -13,7 +12,6 @@ import MobileNav from '@/components/layout/MobileNav.vue'
 const route = useRoute()
 const ui = useUIStore()
 const feedStore = useFeedStore()
-const groupStore = useGroupStore()
 const entryStore = useEntryStore()
 const authStore = useAuthStore()
 
@@ -82,7 +80,7 @@ useKeyboardShortcuts([
 ])
 
 onMounted(async () => {
-  await Promise.all([feedStore.fetchFeeds(), groupStore.fetchGroups()])
+  await feedStore.fetchFeeds()
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
   window.addEventListener('resize', onResize)
@@ -171,7 +169,6 @@ async function refetchAllData() {
   try {
     await Promise.all([
       feedStore.fetchFeeds(),
-      groupStore.fetchGroups(),
       entryStore.fetchEntries(entryStore.filter),
     ])
   } catch {

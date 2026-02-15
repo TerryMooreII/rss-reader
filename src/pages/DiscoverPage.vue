@@ -20,6 +20,8 @@ const feedStore = useFeedStore()
 const authStore = useAuthStore()
 const notifications = useNotificationStore()
 
+const faviconErrors = ref(new Set<string>())
+
 const searchQuery = ref('')
 const selectedCategory = ref<string | null>(null)
 const feeds = ref<(Feed & { subscriber_count?: number })[]>([])
@@ -35,7 +37,8 @@ async function loadFeeds() {
       .select('*')
       .eq('is_private', false)
       .eq('status', 'active')
-      .order('created_at', { ascending: false })
+      .order('subscriber_count', { ascending: false })
+      .order('title', { ascending: true })
       .limit(50)
 
     if (selectedCategory.value) {
@@ -154,11 +157,11 @@ onMounted(loadFeeds)
           class="flex items-center gap-4 rounded-lg border p-4 hover:bg-bg-hover transition-colors"
         >
           <img
-            v-if="feed.favicon_url"
+            v-if="feed.favicon_url && !faviconErrors.has(feed.id)"
             :src="feed.favicon_url"
             alt=""
             class="h-8 w-8 rounded shrink-0"
-            @error="($event.target as HTMLImageElement).style.display = 'none'"
+            @error="faviconErrors.add(feed.id)"
           />
           <RssIcon v-else class="h-8 w-8 shrink-0 text-text-muted" />
 
@@ -169,9 +172,10 @@ onMounted(loadFeeds)
             <p v-if="feed.description" class="text-sm text-text-muted line-clamp-1">
               {{ feed.description }}
             </p>
-            <span class="text-xs text-text-muted capitalize">{{
-              feed.category.replace('_', ' ')
-            }}</span>
+            <div class="flex items-center gap-2 text-xs text-text-muted">
+              <span class="capitalize">{{ feed.category.replace('_', ' ') }}</span>
+              <span v-if="feed.subscriber_count" class="text-text-muted">&middot; {{ feed.subscriber_count }} {{ feed.subscriber_count === 1 ? 'subscriber' : 'subscribers' }}</span>
+            </div>
           </div>
 
           <button

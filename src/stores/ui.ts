@@ -2,7 +2,7 @@ import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 type Theme = 'light' | 'dark' | 'midnight' | 'forest'
-type DisplayMode = 'comfortable' | 'compact'
+type DisplayMode = 'comfortable' | 'compact' | 'feed'
 
 const LS_THEME = 'acta:theme'
 const LS_DISPLAY_MODE = 'acta:displayMode'

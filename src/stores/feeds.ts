@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
 import type { SubscribedFeed } from '@/types/models'
+import { FEED_CATEGORIES } from '@/config/constants'
 import { useAuthStore } from './auth'
 
 const _ta = document.createElement('textarea')
@@ -29,29 +30,22 @@ export const useFeedStore = defineStore('feeds', () => {
       feeds.value.find((f) => f.id === id)
   })
 
-  /** Map of group_id -> SubscribedFeed[] built from the group_feeds join. */
-  const feedsByGroupId = computed(() => {
+  /** Map of category value -> SubscribedFeed[] grouped by the feed's category. */
+  const feedsByCategory = computed(() => {
     const map = new Map<string, SubscribedFeed[]>()
     for (const feed of feeds.value) {
-      // group_ids is assembled during fetchFeeds
-      const gids = (feed as SubscribedFeed & { group_ids?: string[] }).group_ids
-      if (gids) {
-        for (const gid of gids) {
-          const existing = map.get(gid) ?? []
-          existing.push(feed)
-          map.set(gid, existing)
-        }
-      }
+      const cat = feed.category || 'other'
+      const existing = map.get(cat) ?? []
+      existing.push(feed)
+      map.set(cat, existing)
     }
     return map
   })
 
-  /** Feeds that don't belong to any group. */
-  const ungroupedFeeds = computed(() => {
-    return feeds.value.filter((feed) => {
-      const gids = (feed as SubscribedFeed & { group_ids?: string[] }).group_ids
-      return !gids || gids.length === 0
-    })
+  /** Sorted list of category values that have at least one subscribed feed. */
+  const usedCategories = computed(() => {
+    const used = new Set(feeds.value.map((f) => f.category || 'other'))
+    return FEED_CATEGORIES.filter((c) => used.has(c.value)).map((c) => c.value)
   })
 
   /** Total unread count across all feeds. */
@@ -63,6 +57,12 @@ export const useFeedStore = defineStore('feeds', () => {
   const favoriteFeeds = computed(() => {
     return feeds.value.filter((f) => f.is_favorite)
   })
+
+  /** Category unread counts from RPC. */
+  const categoryUnreadCounts = ref<Map<string, number>>(new Map())
+
+  /** Which categories are expanded in the sidebar. */
+  const expandedCategories = ref<Set<string>>(new Set())
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -113,20 +113,18 @@ export const useFeedStore = defineStore('feeds', () => {
         (favorites ?? []).map((f: { feed_id: string }) => f.feed_id),
       )
 
-      // 4. Group associations
-      const { data: groupFeeds, error: gfError } = await supabase
-        .from('group_feeds')
-        .select('group_id, feed_id')
+      // 4. Category unread counts
+      const { data: catCounts, error: catError } = await supabase.rpc(
+        'get_category_unread_counts',
+        { p_user_id: userId },
+      )
 
-      if (gfError) throw gfError
-
-      const groupMap = new Map<string, string[]>()
-      if (groupFeeds) {
-        for (const gf of groupFeeds as { group_id: string; feed_id: string }[]) {
-          const existing = groupMap.get(gf.feed_id) ?? []
-          existing.push(gf.group_id)
-          groupMap.set(gf.feed_id, existing)
+      if (!catError && catCounts) {
+        const catMap = new Map<string, number>()
+        for (const row of catCounts as { category: string; unread_count: number }[]) {
+          catMap.set(row.category, row.unread_count)
         }
+        categoryUnreadCounts.value = catMap
       }
 
       // 5. Assemble SubscribedFeed[]
@@ -142,8 +140,7 @@ export const useFeedStore = defineStore('feeds', () => {
           notify: sub.notify as boolean,
           unread_count: unreadMap.get(feedId) ?? 0,
           is_favorite: favoriteSet.has(feedId),
-          group_ids: groupMap.get(feedId) ?? [],
-        } as SubscribedFeed & { group_ids: string[] }
+        } as SubscribedFeed
       })
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch feeds'
@@ -238,15 +235,53 @@ export const useFeedStore = defineStore('feeds', () => {
     }
   }
 
+  /**
+   * Toggle a category's expanded/collapsed state in the sidebar.
+   */
+  function toggleCategory(category: string): void {
+    if (expandedCategories.value.has(category)) {
+      expandedCategories.value.delete(category)
+    } else {
+      expandedCategories.value.add(category)
+    }
+  }
+
+  /**
+   * Fetch category unread counts from the RPC.
+   */
+  async function fetchCategoryUnreadCounts(): Promise<void> {
+    try {
+      const authStore = useAuthStore()
+      const { data, error: rpcError } = await supabase.rpc(
+        'get_category_unread_counts',
+        { p_user_id: authStore.user!.id },
+      )
+
+      if (rpcError) throw rpcError
+
+      const catMap = new Map<string, number>()
+      if (data) {
+        for (const row of data as { category: string; unread_count: number }[]) {
+          catMap.set(row.category, row.unread_count)
+        }
+      }
+      categoryUnreadCounts.value = catMap
+    } catch (err: unknown) {
+      console.error('Failed to fetch category unread counts:', err)
+    }
+  }
+
   return {
     // State
     feeds,
     loading,
     error,
+    categoryUnreadCounts,
+    expandedCategories,
     // Getters
     feedById,
-    feedsByGroupId,
-    ungroupedFeeds,
+    feedsByCategory,
+    usedCategories,
     totalUnread,
     favoriteFeeds,
     // Actions
@@ -255,5 +290,7 @@ export const useFeedStore = defineStore('feeds', () => {
     unsubscribeFeed,
     toggleFavorite,
     updateUnreadCount,
+    toggleCategory,
+    fetchCategoryUnreadCounts,
   }
 })

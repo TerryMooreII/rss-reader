@@ -15,6 +15,8 @@ const router = useRouter()
 const feedStore = useFeedStore()
 const notifications = useNotificationStore()
 
+const faviconError = ref(false)
+
 const isActive = computed(
   () => route.name === 'feed-entries' && route.params.feedId === props.feed?.id,
 )
@@ -81,12 +83,12 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
       :class="isActive ? 'sidebar-item-active' : 'sidebar-item'"
     >
       <img
-        v-if="feed.favicon_url"
+        v-if="feed.favicon_url && !faviconError"
         :src="feed.favicon_url"
         :alt="feed.title || 'Feed'"
         class="h-4 w-4 shrink-0 rounded"
         loading="lazy"
-        @error="($event.target as HTMLImageElement).style.display = 'none'"
+        @error="faviconError = true"
       />
       <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" />
       <span class="flex-1 truncate text-left">

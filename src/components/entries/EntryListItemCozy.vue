@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Entry } from '@/types/models'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { RssIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps<{
@@ -9,6 +9,8 @@ const props = defineProps<{
 }>()
 
 defineEmits<{ click: [] }>()
+
+const faviconError = ref(false)
 
 const timeAgo = computed(() => {
   if (!props.entry.published_at) return ''
@@ -44,12 +46,12 @@ const excerpt = computed(() => {
   >
     <div class="flex items-center gap-2 mb-1">
       <img
-        v-if="entry.feed_favicon_url"
+        v-if="entry.feed_favicon_url && !faviconError"
         :src="entry.feed_favicon_url"
         :alt="entry.feed_title || ''"
         class="h-4 w-4 shrink-0 rounded"
         loading="lazy"
-        @error="($event.target as HTMLImageElement).style.display = 'none'"
+        @error="faviconError = true"
       />
       <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" />
       <span class="text-xs text-text-muted truncate">{{ entry.feed_title }}</span>

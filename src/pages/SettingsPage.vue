@@ -211,7 +211,7 @@ const shortcuts = [
 
         <div>
           <label class="block text-sm font-medium text-text-secondary mb-2">Display Mode</label>
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-3 gap-2">
             <button
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
               :class="
@@ -233,6 +233,17 @@ const shortcuts = [
               @click="settings.display_mode = 'compact'"
             >
               Compact
+            </button>
+            <button
+              class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+              :class="
+                settings.display_mode === 'feed'
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'hover:bg-bg-hover text-text-secondary'
+              "
+              @click="settings.display_mode = 'feed'"
+            >
+              Feed
             </button>
           </div>
         </div>

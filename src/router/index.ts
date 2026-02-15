@@ -77,6 +77,12 @@ const router = createRouter({
           props: true,
         },
         {
+          path: 'category/:category',
+          name: 'category-entries',
+          component: () => import('@/pages/CategoryEntriesPage.vue'),
+          props: true,
+        },
+        {
           path: 'discover',
           name: 'discover',
           component: () => import('@/pages/DiscoverPage.vue'),

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feeds'
-import { useGroupStore } from '@/stores/groups'
 import { useUIStore } from '@/stores/ui'
+import { FEED_CATEGORIES } from '@/config/constants'
 import {
   RssIcon,
   InboxIcon,
@@ -13,27 +13,101 @@ import {
   Cog6ToothIcon,
   PlusIcon,
   ShieldCheckIcon,
-  FolderIcon,
   ChevronRightIcon,
+  CpuChipIcon,
+  BeakerIcon,
+  BriefcaseIcon,
+  BanknotesIcon,
+  BuildingLibraryIcon,
+  GlobeAltIcon,
+  FilmIcon,
+  TrophyIcon,
+  HeartIcon,
+  CakeIcon,
+  GlobeAmericasIcon,
+  AcademicCapIcon,
+  SwatchIcon,
+  PuzzlePieceIcon,
+  MusicalNoteIcon,
+  CameraIcon,
+  CodeBracketIcon,
+  SparklesIcon,
+  CommandLineIcon,
+  FaceSmileIcon,
+  MicrophoneIcon,
+  VideoCameraIcon,
+  PencilSquareIcon,
+  TagIcon,
 } from '@heroicons/vue/24/outline'
 import SidebarFeedItem from '@/components/sidebar/SidebarFeedItem.vue'
 import AddFeedDialog from '@/components/sidebar/AddFeedDialog.vue'
 import { ref } from 'vue'
+import type { Component } from 'vue'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const feedStore = useFeedStore()
-const groupStore = useGroupStore()
 const ui = useUIStore()
 
 const showAddFeed = ref(false)
 
 const totalUnread = computed(() => feedStore.totalUnread)
 
-const ungroupedFeeds = computed(() => feedStore.ungroupedFeeds)
+const iconMap: Record<string, Component> = {
+  CpuChipIcon,
+  BeakerIcon,
+  BriefcaseIcon,
+  BanknotesIcon,
+  BuildingLibraryIcon,
+  GlobeAltIcon,
+  FilmIcon,
+  TrophyIcon,
+  HeartIcon,
+  CakeIcon,
+  GlobeAmericasIcon,
+  AcademicCapIcon,
+  SwatchIcon,
+  PuzzlePieceIcon,
+  MusicalNoteIcon,
+  CameraIcon,
+  CodeBracketIcon,
+  ShieldCheckIcon,
+  SparklesIcon,
+  CommandLineIcon,
+  FaceSmileIcon,
+  MicrophoneIcon,
+  VideoCameraIcon,
+  PencilSquareIcon,
+  TagIcon,
+}
+
+const categoryMeta = computed(() => {
+  const map = new Map<string, { label: string; icon: Component }>()
+  for (const cat of FEED_CATEGORIES) {
+    map.set(cat.value, {
+      label: cat.label,
+      icon: iconMap[cat.icon] || TagIcon,
+    })
+  }
+  return map
+})
 
 function isActive(name: string) {
   return route.name === name
+}
+
+function isCategoryActive(category: string) {
+  return route.name === 'category-entries' && route.params.category === category
+}
+
+function onCategoryClick(category: string) {
+  router.push({ name: 'category-entries', params: { category } })
+  feedStore.toggleCategory(category)
+}
+
+function categoryUnread(category: string): number {
+  return feedStore.categoryUnreadCounts.get(category) ?? 0
 }
 </script>
 
@@ -112,51 +186,42 @@ function isActive(name: string) {
         <span class="flex-1">Admin</span>
       </RouterLink>
 
-      <!-- Groups -->
-      <div v-if="groupStore.sortedGroups.length > 0" class="pt-4">
+      <!-- Categories -->
+      <div v-if="feedStore.usedCategories.length > 0" class="pt-4">
         <p class="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-text-muted">
-          Groups
+          Categories
         </p>
-        <div v-for="group in groupStore.sortedGroups" :key="group.id" class="space-y-0.5">
+        <div v-for="cat in feedStore.usedCategories" :key="cat" class="space-y-0.5">
           <button
             class="sidebar-item w-full"
-            :class="{ 'sidebar-item-active': route.params.groupId === group.id }"
-            @click="groupStore.toggleGroup(group.id)"
+            :class="{ 'sidebar-item-active': isCategoryActive(cat) }"
+            @click="onCategoryClick(cat)"
           >
             <ChevronRightIcon
               class="h-4 w-4 shrink-0 transition-transform"
-              :class="{ 'rotate-90': groupStore.expandedGroups.has(group.id) }"
+              :class="{ 'rotate-90': feedStore.expandedCategories.has(cat) }"
             />
-            <FolderIcon class="h-5 w-5 shrink-0" />
-            <span class="flex-1 truncate text-left">{{ group.name }}</span>
+            <component
+              :is="categoryMeta.get(cat)?.icon"
+              class="h-5 w-5 shrink-0"
+            />
+            <span class="flex-1 truncate text-left">{{ categoryMeta.get(cat)?.label }}</span>
             <span
-              v-if="group.unread_count && group.unread_count > 0"
+              v-if="categoryUnread(cat) > 0"
               class="text-xs text-text-muted"
             >
-              {{ group.unread_count }}
+              {{ categoryUnread(cat) }}
             </span>
           </button>
-          <!-- Group feeds (collapsible) -->
-          <div v-show="groupStore.expandedGroups.has(group.id)" class="pl-4">
+          <!-- Category feeds (collapsible) -->
+          <div v-show="feedStore.expandedCategories.has(cat)" class="pl-4">
             <SidebarFeedItem
-              v-for="feedId in groupStore.groupFeeds.get(group.id) || []"
-              :key="feedId"
-              :feed="feedStore.feedById(feedId)"
+              v-for="feed in feedStore.feedsByCategory.get(cat) || []"
+              :key="feed.id"
+              :feed="feed"
             />
           </div>
         </div>
-      </div>
-
-      <!-- Feeds -->
-      <div class="pt-4">
-        <p class="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-text-muted">
-          Feeds
-        </p>
-        <SidebarFeedItem
-          v-for="feed in ungroupedFeeds"
-          :key="feed.id"
-          :feed="feed"
-        />
       </div>
     </nav>
 

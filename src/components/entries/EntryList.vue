@@ -4,6 +4,7 @@ import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
 import EntryListItem from './EntryListItem.vue'
 import EntryListItemCozy from './EntryListItemCozy.vue'
+import EntryListItemFeed from './EntryListItemFeed.vue'
 
 const entryStore = useEntryStore()
 const ui = useUIStore()
@@ -12,9 +13,25 @@ const scrollContainer = ref<HTMLElement | null>(null)
 const sentinel = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 
-const component = computed(() =>
-  ui.displayMode === 'compact' ? EntryListItem : EntryListItemCozy,
-)
+// Track which entry is expanded in feed mode
+const expandedEntryId = ref<string | null>(null)
+
+const isFeedMode = computed(() => ui.displayMode === 'feed')
+
+const component = computed(() => {
+  if (ui.displayMode === 'compact') return EntryListItem
+  if (ui.displayMode === 'feed') return EntryListItemFeed
+  return EntryListItemCozy
+})
+
+function handleEntryClick(entryId: string) {
+  if (isFeedMode.value) {
+    // Toggle expand/collapse in feed mode
+    expandedEntryId.value = expandedEntryId.value === entryId ? null : entryId
+  } else {
+    entryStore.selectEntry(entryId)
+  }
+}
 
 function handleIntersect(entries: IntersectionObserverEntry[]) {
   if (entries[0]?.isIntersecting && entryStore.hasMore && !entryStore.loadingMore) {
@@ -46,6 +63,14 @@ watch(
     }
   },
 )
+
+// Reset expanded entry when switching modes or filters
+watch(() => ui.displayMode, () => {
+  expandedEntryId.value = null
+})
+watch(() => entryStore.filter, () => {
+  expandedEntryId.value = null
+})
 </script>
 
 <template>
@@ -77,17 +102,32 @@ watch(
     </div>
 
     <!-- Entry list -->
-    <template v-else>
-      <component
-        :is="component"
-        v-for="entry in entryStore.entries"
-        :key="entry.id"
-        :entry="entry"
-        :selected="entry.id === entryStore.selectedEntryId"
-        :data-entry-id="entry.id"
-        @click="entryStore.selectEntry(entry.id)"
-      />
-    </template>
+    <div v-else :class="isFeedMode ? 'mx-auto max-w-2xl' : ''">
+      <!-- Feed mode -->
+      <template v-if="isFeedMode">
+        <EntryListItemFeed
+          v-for="entry in entryStore.entries"
+          :key="entry.id"
+          :entry="entry"
+          :expanded="entry.id === expandedEntryId"
+          :data-entry-id="entry.id"
+          @click="handleEntryClick(entry.id)"
+        />
+      </template>
+
+      <!-- Compact / Comfortable modes -->
+      <template v-else>
+        <component
+          :is="component"
+          v-for="entry in entryStore.entries"
+          :key="entry.id"
+          :entry="entry"
+          :selected="entry.id === entryStore.selectedEntryId"
+          :data-entry-id="entry.id"
+          @click="handleEntryClick(entry.id)"
+        />
+      </template>
+    </div>
 
     <!-- Infinite scroll sentinel -->
     <div ref="sentinel" class="h-px" />

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
 import DOMPurify from 'dompurify'
@@ -8,6 +8,7 @@ import {
   StarIcon as StarOutline,
   ShareIcon,
   XMarkIcon,
+  RssIcon,
 } from '@heroicons/vue/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/vue/24/solid'
 
@@ -15,6 +16,9 @@ const entryStore = useEntryStore()
 const ui = useUIStore()
 
 const entry = computed(() => entryStore.selectedEntry)
+
+const faviconError = ref(false)
+watch(() => entry.value?.id, () => { faviconError.value = false })
 
 function decodeXmlEntities(text: string): string {
   return text
@@ -100,11 +104,13 @@ function shareLink() {
         <!-- Feed info -->
         <div class="mb-4 flex items-center gap-2 text-xs text-text-muted">
           <img
-            v-if="entry.feed_favicon_url"
+            v-if="entry.feed_favicon_url && !faviconError"
             :src="entry.feed_favicon_url"
             alt=""
             class="h-4 w-4 rounded"
+            @error="faviconError = true"
           />
+          <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" />
           <span class="font-medium text-accent">{{ entry.feed_title }}</span>
           <span v-if="entry.author">&middot; {{ entry.author }}</span>
         </div>

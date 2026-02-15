@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
-import { CheckIcon, Bars3BottomLeftIcon, Squares2X2Icon, Bars3Icon } from '@heroicons/vue/24/outline'
+import { CheckIcon, Bars3BottomLeftIcon, Squares2X2Icon, Bars3Icon, NewspaperIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps<{
   title: string
@@ -13,6 +13,13 @@ const ui = useUIStore()
 function toggleUnreadFilter() {
   const newFilter = { ...entryStore.filter, unreadOnly: !entryStore.filter.unreadOnly }
   entryStore.fetchEntries(newFilter)
+}
+
+const displayModeOrder: Array<'comfortable' | 'compact' | 'feed'> = ['comfortable', 'compact', 'feed']
+function cycleDisplayMode() {
+  const currentIndex = displayModeOrder.indexOf(ui.displayMode)
+  const nextIndex = (currentIndex + 1) % displayModeOrder.length
+  ui.setDisplayMode(displayModeOrder[nextIndex]!)
 }
 </script>
 
@@ -67,11 +74,12 @@ function toggleUnreadFilter() {
       <!-- Display mode toggle -->
       <button
         class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
-        title="Toggle display mode"
-        @click="ui.setDisplayMode(ui.displayMode === 'comfortable' ? 'compact' : 'comfortable')"
+        :title="`View: ${ui.displayMode}`"
+        @click="cycleDisplayMode"
       >
         <Bars3BottomLeftIcon v-if="ui.displayMode === 'comfortable'" class="h-4 w-4" />
-        <Squares2X2Icon v-else class="h-4 w-4" />
+        <Squares2X2Icon v-else-if="ui.displayMode === 'compact'" class="h-4 w-4" />
+        <NewspaperIcon v-else class="h-4 w-4" />
       </button>
     </div>
   </div>
