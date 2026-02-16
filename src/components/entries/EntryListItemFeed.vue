@@ -55,8 +55,12 @@ const media = computed(() => {
 })
 
 const excerpt = computed(() => {
-  const text = props.entry.summary || props.entry.content_text || ''
-  return text.length > 300 ? text.slice(0, 300) + '...' : text
+  let text = props.entry.summary || props.entry.content_text || ''
+  if (!text && props.entry.content_html) {
+    const doc = new DOMParser().parseFromString(props.entry.content_html, 'text/html')
+    text = doc.body.textContent?.trim() || ''
+  }
+  return text.length > 500 ? text.slice(0, 500) + '...' : text
 })
 
 function decodeXmlEntities(text: string): string {
@@ -153,24 +157,24 @@ function collapse(e: Event) {
         <span class="ml-auto text-xs text-text-muted whitespace-nowrap">{{ timeAgo }}</span>
       </div>
 
-      <!-- Title -->
-      <h3
-        class="text-base leading-snug mb-2"
-        :class="isRead && !expanded ? 'text-text-muted' : 'text-text-primary font-semibold'"
-      >
-        {{ entry.title || 'Untitled' }}
-      </h3>
-
-      <!-- Collapsed: summary + thumbnail -->
+      <!-- Collapsed: title + summary + thumbnail side by side -->
       <div v-if="!expanded" class="flex gap-3">
-        <p v-if="excerpt" class="flex-1 text-sm text-text-secondary leading-relaxed line-clamp-4">
-          {{ excerpt }}
-        </p>
+        <div class="flex-1 min-w-0">
+          <h3
+            class="text-base leading-snug mb-1"
+            :class="isRead ? 'text-text-muted' : 'text-text-primary font-semibold'"
+          >
+            {{ entry.title || 'Untitled' }}
+          </h3>
+          <p v-if="excerpt" class="text-sm text-text-secondary leading-relaxed line-clamp-4">
+            {{ excerpt }}
+          </p>
+        </div>
         <img
           v-if="entry.image_url"
           :src="entry.image_url"
           :alt="entry.title || ''"
-          class="h-20 w-28 shrink-0 rounded-lg object-cover ml-auto"
+          class="h-24 w-32 shrink-0 rounded-lg object-cover self-start mt-0.5"
           loading="lazy"
           @error="($event.target as HTMLImageElement).style.display = 'none'"
         />
@@ -178,6 +182,9 @@ function collapse(e: Event) {
 
       <!-- Expanded: full content -->
       <div v-else>
+        <h3 class="text-base leading-snug mb-2 text-text-primary font-semibold">
+          {{ entry.title || 'Untitled' }}
+        </h3>
         <!-- Featured image (hidden when YouTube video detected) -->
         <img
           v-if="entry.image_url && media?.type !== 'youtube'"
@@ -201,7 +208,7 @@ function collapse(e: Event) {
         />
 
         <!-- Read full article link -->
-        <div v-if="entry.url" class="mt-4 pt-3 border-t border-border">
+        <div v-if="entry.url" class="mt-4">
           <a
             :href="entry.url"
             target="_blank"
