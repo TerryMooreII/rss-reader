@@ -7,6 +7,7 @@ import { useFeedStore } from '@/stores/feeds'
 import { useNotificationStore } from '@/stores/notifications'
 import { supabase } from '@/config/supabase'
 import type { UserSettings } from '@/types/models'
+import GroupsSettingsTab from '@/components/settings/GroupsSettingsTab.vue'
 
 const authStore = useAuthStore()
 const ui = useUIStore()
@@ -21,6 +22,7 @@ const tabs = [
   { id: 'general', label: 'General' },
   { id: 'account', label: 'Account' },
   { id: 'notifications', label: 'Notifications' },
+  { id: 'groups', label: 'Groups' },
   { id: 'import-export', label: 'Import / Export' },
   { id: 'keyboard', label: 'Keyboard Shortcuts' },
 ]
@@ -365,6 +367,9 @@ const shortcuts = [
           {{ loading ? 'Saving...' : 'Save' }}
         </button>
       </div>
+
+      <!-- Groups -->
+      <GroupsSettingsTab v-if="activeTab === 'groups'" />
 
       <!-- Import/Export -->
       <div v-if="activeTab === 'import-export'" class="space-y-6">

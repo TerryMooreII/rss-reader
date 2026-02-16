@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feeds'
+import { useGroupStore } from '@/stores/groups'
 import { useUIStore } from '@/stores/ui'
+import { useNotificationStore } from '@/stores/notifications'
 import { FEED_CATEGORIES } from '@/config/constants'
 import {
   RssIcon,
@@ -40,17 +42,74 @@ import {
   TagIcon,
 } from '@heroicons/vue/24/outline'
 import SidebarFeedItem from '@/components/sidebar/SidebarFeedItem.vue'
+import SidebarGroupItem from '@/components/sidebar/SidebarGroupItem.vue'
 import AddFeedDialog from '@/components/sidebar/AddFeedDialog.vue'
-import { ref } from 'vue'
 import type { Component } from 'vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const feedStore = useFeedStore()
+const groupStore = useGroupStore()
 const ui = useUIStore()
+const notifications = useNotificationStore()
 
 const showAddFeed = ref(false)
+const showCreateGroup = ref(false)
+const newGroupName = ref('')
+const createGroupInput = ref<HTMLInputElement | null>(null)
+
+// Section collapse state (persisted)
+const groupsSectionOpen = ref(localStorage.getItem('acta_groups_section') !== 'collapsed')
+const categoriesSectionOpen = ref(localStorage.getItem('acta_categories_section') !== 'collapsed')
+
+function toggleGroupsSection() {
+  groupsSectionOpen.value = !groupsSectionOpen.value
+  localStorage.setItem('acta_groups_section', groupsSectionOpen.value ? 'open' : 'collapsed')
+}
+
+function toggleCategoriesSection() {
+  categoriesSectionOpen.value = !categoriesSectionOpen.value
+  localStorage.setItem('acta_categories_section', categoriesSectionOpen.value ? 'open' : 'collapsed')
+}
+
+async function openCreateGroup() {
+  showCreateGroup.value = true
+  await nextTick()
+  createGroupInput.value?.focus()
+}
+
+async function createGroup() {
+  if (!newGroupName.value.trim()) return
+
+  try {
+    const group = await groupStore.createGroup(newGroupName.value.trim())
+    if (group) {
+      groupStore.expandedGroups.add(group.id)
+    }
+    notifications.success('Group created')
+    newGroupName.value = ''
+    showCreateGroup.value = false
+  } catch {
+    notifications.error('Failed to create group')
+  }
+}
+
+function cancelCreateGroup() {
+  showCreateGroup.value = false
+  newGroupName.value = ''
+}
+
+// Auto-expand group when navigating to it
+watch(
+  () => route.params.groupId,
+  (groupId) => {
+    if (groupId && typeof groupId === 'string') {
+      groupStore.expandedGroups.add(groupId)
+    }
+  },
+  { immediate: true },
+)
 
 const totalUnread = computed(() => feedStore.totalUnread)
 
@@ -191,46 +250,122 @@ function categoryUnread(category: string): number {
         <span class="flex-1">Admin</span>
       </RouterLink>
 
-      <!-- Categories -->
-      <div v-if="feedStore.usedCategories.length > 0" class="pt-4">
-        <p class="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-text-muted">
-          Categories
-        </p>
-        <div v-for="cat in feedStore.usedCategories" :key="cat" class="space-y-0.5">
+      <!-- Groups -->
+      <div v-if="groupStore.sortedGroups.length > 0 || showCreateGroup" class="pt-4">
+        <div class="flex items-center justify-between px-3 pb-1">
           <button
-            class="sidebar-item w-full"
-            :class="{ 'sidebar-item-active': isCategoryActive(cat) }"
-            :aria-expanded="feedStore.expandedCategories.has(cat)"
-            :aria-current="isCategoryActive(cat) ? 'page' : undefined"
-            @click="onCategoryClick(cat)"
+            class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-text-muted hover:text-text-primary"
+            :aria-expanded="groupsSectionOpen"
+            @click="toggleGroupsSection"
           >
             <ChevronRightIcon
-              class="h-4 w-4 shrink-0 transition-transform"
-              :class="{ 'rotate-90': feedStore.expandedCategories.has(cat) }"
+              class="h-3 w-3 transition-transform"
+              :class="{ 'rotate-90': groupsSectionOpen }"
               aria-hidden="true"
             />
-            <component
-              :is="categoryMeta.get(cat)?.icon"
-              class="h-5 w-5 shrink-0"
-              aria-hidden="true"
-            />
-            <span class="flex-1 truncate text-left">{{ categoryMeta.get(cat)?.label }}</span>
-            <span
-              class="text-xs"
-              :class="categoryUnread(cat) > 0 ? 'text-text-muted' : 'text-text-muted/40'"
-            >
-              {{ categoryUnread(cat) }}
-            </span>
+            Groups
           </button>
-          <!-- Category feeds (collapsible) -->
-          <div v-show="feedStore.expandedCategories.has(cat)" role="group" :aria-label="categoryMeta.get(cat)?.label + ' feeds'" class="pl-4">
-            <SidebarFeedItem
-              v-for="feed in feedStore.feedsByCategory.get(cat) || []"
-              :key="feed.id"
-              :feed="feed"
+          <button
+            class="rounded p-0.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
+            :class="{ 'invisible': !groupsSectionOpen || showCreateGroup }"
+            aria-label="Create group"
+            @click="openCreateGroup"
+          >
+            <PlusIcon class="h-4 w-4" />
+          </button>
+        </div>
+
+        <template v-if="groupsSectionOpen">
+          <!-- Quick create input -->
+          <div v-if="showCreateGroup" class="px-3 pb-2">
+            <input
+              ref="createGroupInput"
+              v-model="newGroupName"
+              type="text"
+              placeholder="Group name"
+              class="w-full rounded border border-border bg-bg-secondary px-2 py-1 text-sm text-text-primary"
+              @keydown.enter="createGroup"
+              @keydown.escape="cancelCreateGroup"
             />
           </div>
+
+          <div v-for="group in groupStore.sortedGroups" :key="group.id" class="space-y-0.5">
+            <SidebarGroupItem
+              :group="group"
+              :is-expanded="groupStore.expandedGroups.has(group.id)"
+            />
+
+            <!-- Group feeds (collapsible) -->
+            <div
+              v-show="groupStore.expandedGroups.has(group.id)"
+              role="group"
+              :aria-label="group.name + ' feeds'"
+              class="pl-4"
+            >
+              <SidebarFeedItem
+                v-for="feedId in groupStore.feedsByGroup(group.id)"
+                :key="feedId"
+                :feed="feedStore.feedById(feedId)"
+              />
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Categories -->
+      <div v-if="feedStore.usedCategories.length > 0" class="pt-4">
+        <div class="flex items-center px-3 pb-1">
+          <button
+            class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-text-muted hover:text-text-primary"
+            :aria-expanded="categoriesSectionOpen"
+            @click="toggleCategoriesSection"
+          >
+            <ChevronRightIcon
+              class="h-3 w-3 transition-transform"
+              :class="{ 'rotate-90': categoriesSectionOpen }"
+              aria-hidden="true"
+            />
+            Categories
+          </button>
         </div>
+
+        <template v-if="categoriesSectionOpen">
+          <div v-for="cat in feedStore.usedCategories" :key="cat" class="space-y-0.5">
+            <button
+              class="sidebar-item w-full"
+              :class="{ 'sidebar-item-active': isCategoryActive(cat) }"
+              :aria-expanded="feedStore.expandedCategories.has(cat)"
+              :aria-current="isCategoryActive(cat) ? 'page' : undefined"
+              @click="onCategoryClick(cat)"
+            >
+              <ChevronRightIcon
+                class="h-4 w-4 shrink-0 transition-transform"
+                :class="{ 'rotate-90': feedStore.expandedCategories.has(cat) }"
+                aria-hidden="true"
+              />
+              <component
+                :is="categoryMeta.get(cat)?.icon"
+                class="h-5 w-5 shrink-0"
+                aria-hidden="true"
+              />
+              <span class="flex-1 truncate text-left">{{ categoryMeta.get(cat)?.label }}</span>
+              <span
+                class="text-xs"
+                :class="categoryUnread(cat) > 0 ? 'text-text-muted' : 'text-text-muted/40'"
+              >
+                {{ categoryUnread(cat) }}
+              </span>
+            </button>
+            <!-- Category feeds (collapsible) -->
+            <div v-show="feedStore.expandedCategories.has(cat)" role="group" :aria-label="categoryMeta.get(cat)?.label + ' feeds'" class="pl-4">
+              <SidebarFeedItem
+                v-for="feed in feedStore.feedsByCategory.get(cat) || []"
+                :key="feed.id"
+                :feed="feed"
+              />
+            </div>
+          </div>
+        </template>
       </div>
     </nav>
 

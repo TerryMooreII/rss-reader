@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
 import type { Group } from '@/types/models'
@@ -11,7 +11,9 @@ export const useGroupStore = defineStore('groups', () => {
   const groups = ref<Group[]>([])
   const groupFeeds = ref<Map<string, string[]>>(new Map())
   const loading = ref(false)
-  const expandedGroups = ref<Set<string>>(new Set())
+  const expandedGroups = ref<Set<string>>(
+    new Set(JSON.parse(localStorage.getItem('acta_expanded_groups') || '[]')),
+  )
 
   // ---------------------------------------------------------------------------
   // Getters
@@ -25,6 +27,11 @@ export const useGroupStore = defineStore('groups', () => {
   /** Return a group by its id. */
   const groupById = computed(() => {
     return (id: string): Group | undefined => groups.value.find((g) => g.id === id)
+  })
+
+  /** Return the feed ids belonging to a group. */
+  const feedsByGroup = computed(() => {
+    return (groupId: string): string[] => groupFeeds.value.get(groupId) ?? []
   })
 
   // ---------------------------------------------------------------------------
@@ -73,8 +80,8 @@ export const useGroupStore = defineStore('groups', () => {
 
       const unreadMap = new Map<string, number>()
       if (!unreadError && unreadData) {
-        for (const row of unreadData as { group_id: string; count: number }[]) {
-          unreadMap.set(row.group_id, row.count)
+        for (const row of unreadData as { group_id: string; unread_count: number }[]) {
+          unreadMap.set(row.group_id, row.unread_count)
         }
       }
 
@@ -229,6 +236,12 @@ export const useGroupStore = defineStore('groups', () => {
     } else {
       expandedGroups.value.add(id)
     }
+    persistExpandedGroups()
+  }
+
+  /** Persist expanded groups to localStorage. */
+  function persistExpandedGroups(): void {
+    localStorage.setItem('acta_expanded_groups', JSON.stringify([...expandedGroups.value]))
   }
 
   return {
@@ -240,6 +253,7 @@ export const useGroupStore = defineStore('groups', () => {
     // Getters
     sortedGroups,
     groupById,
+    feedsByGroup,
     // Actions
     fetchGroups,
     createGroup,

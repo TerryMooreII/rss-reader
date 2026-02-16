@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/ui'
 import { useFeedStore } from '@/stores/feeds'
 import { useEntryStore } from '@/stores/entries'
 import { useAuthStore } from '@/stores/auth'
+import { useGroupStore } from '@/stores/groups'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import MobileNav from '@/components/layout/MobileNav.vue'
@@ -14,6 +15,7 @@ const ui = useUIStore()
 const feedStore = useFeedStore()
 const entryStore = useEntryStore()
 const authStore = useAuthStore()
+const groupStore = useGroupStore()
 
 const isMobile = ref(window.innerWidth < 768)
 
@@ -87,7 +89,7 @@ useKeyboardShortcuts([
 ])
 
 onMounted(async () => {
-  await feedStore.fetchFeeds()
+  await Promise.all([feedStore.fetchFeeds(), groupStore.fetchGroups()])
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
   window.addEventListener('resize', onResize)
@@ -176,6 +178,7 @@ async function refetchAllData() {
   try {
     await Promise.all([
       feedStore.fetchFeeds(),
+      groupStore.fetchGroups(),
       entryStore.fetchEntries(entryStore.filter),
     ])
   } catch {

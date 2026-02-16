@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { SubscribedFeed } from '@/types/models'
-import { RssIcon, EllipsisVerticalIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import {
+  RssIcon,
+  EllipsisVerticalIcon,
+  TrashIcon,
+  FolderPlusIcon,
+  ChevronRightIcon,
+  CheckIcon,
+} from '@heroicons/vue/24/outline'
 import { computed, ref, onUnmounted } from 'vue'
 import { useFeedStore } from '@/stores/feeds'
+import { useGroupStore } from '@/stores/groups'
 import { useNotificationStore } from '@/stores/notifications'
 
 const props = defineProps<{
@@ -13,6 +21,7 @@ const props = defineProps<{
 const route = useRoute()
 const router = useRouter()
 const feedStore = useFeedStore()
+const groupStore = useGroupStore()
 const notifications = useNotificationStore()
 
 const faviconError = ref(false)
@@ -23,23 +32,27 @@ const isActive = computed(
 
 const menuOpen = ref(false)
 const confirmingUnsubscribe = ref(false)
+const showGroupSubmenu = ref(false)
 
 function toggleMenu(e: Event) {
   e.preventDefault()
   e.stopPropagation()
   menuOpen.value = !menuOpen.value
   confirmingUnsubscribe.value = false
+  showGroupSubmenu.value = false
 }
 
 function closeMenu() {
   menuOpen.value = false
   confirmingUnsubscribe.value = false
+  showGroupSubmenu.value = false
 }
 
 function startUnsubscribe(e: Event) {
   e.preventDefault()
   e.stopPropagation()
   confirmingUnsubscribe.value = true
+  showGroupSubmenu.value = false
 }
 
 async function confirmUnsubscribe(e: Event) {
@@ -59,6 +72,36 @@ async function confirmUnsubscribe(e: Event) {
     notifications.error('Failed to unsubscribe')
   } finally {
     closeMenu()
+  }
+}
+
+// Group submenu
+function openGroupSubmenu(e: Event) {
+  e.preventDefault()
+  e.stopPropagation()
+  showGroupSubmenu.value = true
+}
+
+function isFeedInGroup(groupId: string): boolean {
+  if (!props.feed) return false
+  return groupStore.feedsByGroup(groupId).includes(props.feed.id)
+}
+
+async function toggleFeedInGroup(e: Event, groupId: string) {
+  e.preventDefault()
+  e.stopPropagation()
+  if (!props.feed) return
+
+  try {
+    if (isFeedInGroup(groupId)) {
+      await groupStore.removeFeedFromGroup(groupId, props.feed.id)
+      notifications.success('Removed from group')
+    } else {
+      await groupStore.addFeedToGroup(groupId, props.feed.id)
+      notifications.success('Added to group')
+    }
+  } catch {
+    notifications.error('Failed to update group')
   }
 }
 
@@ -130,14 +173,53 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
         role="menu"
         class="absolute right-2 top-full z-50 mt-1 w-48 rounded-lg border border-border bg-bg-primary py-1 shadow-lg"
       >
-        <button
-          v-if="!confirmingUnsubscribe"
-          class="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-bg-hover"
-          @click="startUnsubscribe"
-        >
-          <TrashIcon class="h-4 w-4" />
-          Unsubscribe
-        </button>
+        <template v-if="!confirmingUnsubscribe && !showGroupSubmenu">
+          <!-- Add to Group -->
+          <button
+            v-if="groupStore.sortedGroups.length > 0"
+            class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
+            @click="openGroupSubmenu"
+          >
+            <FolderPlusIcon class="h-4 w-4" />
+            <span class="flex-1 text-left">Add to Group</span>
+            <ChevronRightIcon class="h-3 w-3" />
+          </button>
+
+          <!-- Unsubscribe -->
+          <button
+            class="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-bg-hover"
+            @click="startUnsubscribe"
+          >
+            <TrashIcon class="h-4 w-4" />
+            Unsubscribe
+          </button>
+        </template>
+
+        <!-- Group submenu -->
+        <template v-else-if="showGroupSubmenu">
+          <button
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-muted hover:bg-bg-hover"
+            @click.prevent.stop="showGroupSubmenu = false"
+          >
+            <ChevronRightIcon class="h-3 w-3 rotate-180" />
+            Back
+          </button>
+          <div class="border-t border-border my-1" />
+          <button
+            v-for="group in groupStore.sortedGroups"
+            :key="group.id"
+            class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
+            @click="(e) => toggleFeedInGroup(e, group.id)"
+          >
+            <CheckIcon
+              class="h-4 w-4 shrink-0"
+              :class="isFeedInGroup(group.id) ? 'text-accent' : 'text-transparent'"
+            />
+            <span class="flex-1 truncate text-left">{{ group.name }}</span>
+          </button>
+        </template>
+
+        <!-- Unsubscribe confirmation -->
         <div v-else class="px-3 py-2">
           <p class="text-xs text-text-secondary mb-2">Unsubscribe from this feed?</p>
           <div class="flex gap-2">
