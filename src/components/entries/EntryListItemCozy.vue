@@ -40,7 +40,7 @@ const excerpt = computed(() => {
     class="border-b px-4 py-3 cursor-pointer transition-colors"
     :class="[
       selected ? 'bg-bg-active' : 'hover:bg-bg-hover',
-      isRead ? 'opacity-60' : '',
+      isRead ? 'opacity-70' : '',
     ]"
     @click="$emit('click')"
   >

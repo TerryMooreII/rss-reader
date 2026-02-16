@@ -11,6 +11,8 @@ import {
   RssIcon,
 } from '@heroicons/vue/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/vue/24/solid'
+import MediaEmbed from './MediaEmbed.vue'
+import { detectMedia } from '@/utils/mediaDetect'
 
 const entryStore = useEntryStore()
 const ui = useUIStore()
@@ -29,12 +31,21 @@ function decodeXmlEntities(text: string): string {
     .replace(/&amp;/g, '&')
 }
 
+const media = computed(() => {
+  if (!entry.value) return null
+  return detectMedia(entry.value.url, entry.value.content_html)
+})
+
 const sanitizedContent = computed(() => {
   if (!entry.value) return ''
   let html = entry.value.content_html || entry.value.summary || ''
   // Decode XML entities for feeds that entity-encode their HTML content
   if (html.includes('&lt;') || html.includes('&gt;')) {
     html = decodeXmlEntities(html)
+  }
+  // Strip YouTube iframes from content when we render our own player
+  if (media.value?.type === 'youtube') {
+    html = html.replace(/<iframe[^>]*youtube(?:-nocookie)?\.com\/embed\/[^>]*>[\s\S]*?<\/iframe>/gi, '')
   }
   return DOMPurify.sanitize(html, {
     ADD_TAGS: ['iframe'],
@@ -123,15 +134,18 @@ function shareLink() {
         <!-- Date -->
         <p class="text-sm text-text-muted mb-6">{{ timeAgo }}</p>
 
-        <!-- Featured image -->
+        <!-- Featured image (hidden when YouTube video detected) -->
         <img
-          v-if="entry.image_url"
+          v-if="entry.image_url && media?.type !== 'youtube'"
           :src="entry.image_url"
           :alt="entry.title || ''"
           class="w-full rounded-lg mb-6"
           loading="lazy"
           @error="($event.target as HTMLImageElement).style.display = 'none'"
         />
+
+        <!-- Media embed -->
+        <MediaEmbed v-if="media" :media="media" />
 
         <!-- Content -->
         <div

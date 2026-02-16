@@ -87,13 +87,18 @@ export async function addFeed(
   url: string,
   category: string,
   isPrivate: boolean,
-): Promise<Feed & { created: boolean }> {
+): Promise<Feed & { created: boolean; platform?: string; resolved_from?: string }> {
   const { data, error } = await supabase.functions.invoke('add-feed', {
     body: { url, category, is_private: isPrivate },
   })
 
   if (error) throw error
-  return { ...data.feed, created: data.created } as Feed & { created: boolean }
+  return {
+    ...data.feed,
+    created: data.created,
+    platform: data.platform ?? undefined,
+    resolved_from: data.resolved_from ?? undefined,
+  } as Feed & { created: boolean; platform?: string; resolved_from?: string }
 }
 
 export async function toggleFavorite(

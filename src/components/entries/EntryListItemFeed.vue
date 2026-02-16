@@ -13,6 +13,8 @@ import {
   ChevronUpIcon,
 } from '@heroicons/vue/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/vue/24/solid'
+import MediaEmbed from '@/components/reader/MediaEmbed.vue'
+import { detectMedia } from '@/utils/mediaDetect'
 
 const props = defineProps<{
   entry: Entry
@@ -47,6 +49,11 @@ const timeAgo = computed(() => {
   return `${months}mo ago`
 })
 
+const media = computed(() => {
+  if (!props.expanded) return null
+  return detectMedia(props.entry.url, props.entry.content_html)
+})
+
 const excerpt = computed(() => {
   const text = props.entry.summary || props.entry.content_text || ''
   return text.length > 300 ? text.slice(0, 300) + '...' : text
@@ -66,6 +73,10 @@ const sanitizedContent = computed(() => {
   let html = props.entry.content_html || props.entry.summary || ''
   if (html.includes('&lt;') || html.includes('&gt;')) {
     html = decodeXmlEntities(html)
+  }
+  // Strip YouTube iframes from content when we render our own player
+  if (media.value?.type === 'youtube') {
+    html = html.replace(/<iframe[^>]*youtube(?:-nocookie)?\.com\/embed\/[^>]*>[\s\S]*?<\/iframe>/gi, '')
   }
   return DOMPurify.sanitize(html, {
     ADD_TAGS: ['iframe'],
@@ -120,7 +131,7 @@ function collapse(e: Event) {
     class="border-b border-border cursor-pointer transition-colors"
     :class="[
       expanded ? 'bg-bg-secondary/50' : 'hover:bg-bg-hover',
-      isRead && !expanded ? 'opacity-60' : '',
+      isRead && !expanded ? 'opacity-70' : '',
     ]"
     @click="$emit('click')"
   >
@@ -166,15 +177,18 @@ function collapse(e: Event) {
 
       <!-- Expanded: full content -->
       <div v-else>
-        <!-- Featured image -->
+        <!-- Featured image (hidden when YouTube video detected) -->
         <img
-          v-if="entry.image_url"
+          v-if="entry.image_url && media?.type !== 'youtube'"
           :src="entry.image_url"
           :alt="entry.title || ''"
           class="w-full rounded-lg mb-4"
           loading="lazy"
           @error="($event.target as HTMLImageElement).style.display = 'none'"
         />
+
+        <!-- Media embed -->
+        <MediaEmbed v-if="media" :media="media" />
 
         <!-- Sanitized HTML content -->
         <div

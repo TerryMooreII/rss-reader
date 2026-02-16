@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import {
+  Dialog,
+  DialogPanel,
+  DialogTitle,
+  TransitionChild,
+  TransitionRoot,
+} from '@headlessui/vue'
+import {
   Bars3Icon,
   PlusIcon,
   ArrowUpTrayIcon,
@@ -9,6 +16,9 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   RssIcon,
+  XMarkIcon,
+  ArrowPathIcon,
+  Cog6ToothIcon,
 } from '@heroicons/vue/24/outline'
 import { supabase } from '@/config/supabase'
 import { useUIStore } from '@/stores/ui'
@@ -145,26 +155,77 @@ async function toggleUserRole(user: UserProfile) {
   }
 }
 
-async function deleteFeed(feedId: string) {
-  if (!confirm('Delete this feed and all its entries?')) return
+// Manage Feed Modal
+const managedFeed = ref<Feed | null>(null)
+const showManageModal = ref(false)
+const managedFaviconError = ref(false)
+const refetchingIcon = ref(false)
+
+function openManageModal(feed: Feed) {
+  managedFeed.value = { ...feed }
+  managedFaviconError.value = false
+  showManageModal.value = true
+}
+
+function closeManageModal() {
+  showManageModal.value = false
+  managedFeed.value = null
+}
+
+async function updateManagedField(field: string, value: string) {
+  if (!managedFeed.value) return
   try {
-    const { error } = await supabase.from('feeds').delete().eq('id', feedId)
+    const { error } = await supabase.from('feeds').update({ [field]: value }).eq('id', managedFeed.value.id)
     if (error) throw error
-    feeds.value = feeds.value.filter((f) => f.id !== feedId)
-    notifications.success('Feed deleted')
+    ;(managedFeed.value as any)[field] = value
+    const feed = feeds.value.find(f => f.id === managedFeed.value!.id)
+    if (feed) (feed as any)[field] = value
+    notifications.success(`${field === 'category' ? 'Category' : 'Status'} updated`)
   } catch (e: any) {
-    notifications.error(e.message || 'Failed to delete feed')
+    notifications.error(e.message || `Failed to update ${field}`)
   }
 }
 
-async function updateFeedStatus(feed: Feed, status: string) {
+async function refetchFavicon() {
+  if (!managedFeed.value) return
+  const url = managedFeed.value.site_url || managedFeed.value.url
+  let domain: string
   try {
-    const { error } = await supabase.from('feeds').update({ status }).eq('id', feed.id)
+    domain = new URL(url).hostname
+  } catch {
+    notifications.error('Could not determine domain from feed URL')
+    return
+  }
+  refetchingIcon.value = true
+  const newFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+  try {
+    const { error } = await supabase.from('feeds').update({ favicon_url: newFaviconUrl }).eq('id', managedFeed.value.id)
     if (error) throw error
-    feed.status = status as any
-    notifications.success(`Feed status updated to ${status}`)
+    managedFeed.value.favicon_url = newFaviconUrl
+    managedFaviconError.value = false
+    const feed = feeds.value.find(f => f.id === managedFeed.value!.id)
+    if (feed) feed.favicon_url = newFaviconUrl
+    faviconErrors.value.delete(managedFeed.value.id)
+    notifications.success('Icon refreshed')
   } catch (e: any) {
-    notifications.error('Failed to update feed status')
+    notifications.error(e.message || 'Failed to update icon')
+  } finally {
+    refetchingIcon.value = false
+  }
+}
+
+async function deleteManagedFeed() {
+  if (!managedFeed.value) return
+  if (!confirm('Delete this feed and all its entries? This cannot be undone.')) return
+  try {
+    const { error } = await supabase.from('feeds').delete().eq('id', managedFeed.value.id)
+    if (error) throw error
+    feeds.value = feeds.value.filter(f => f.id !== managedFeed.value!.id)
+    totalFeeds.value--
+    closeManageModal()
+    notifications.success('Feed deleted')
+  } catch (e: any) {
+    notifications.error(e.message || 'Failed to delete feed')
   }
 }
 
@@ -422,7 +483,7 @@ onMounted(() => {
                     <ChevronDownIcon v-else-if="sortColumn === 'consecutive_failures' && !sortAsc" class="h-3 w-3" />
                   </span>
                 </th>
-                <th class="pb-2 font-medium">Actions</th>
+                <th class="pb-2 font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -473,21 +534,13 @@ onMounted(() => {
                 </td>
                 <td class="py-2 pr-4 text-text-muted">{{ feed.consecutive_failures }}</td>
                 <td class="py-2">
-                  <div class="flex gap-2">
-                    <select
-                      class="input text-xs py-1 w-24"
-                      :value="feed.status"
-                      @change="updateFeedStatus(feed, ($event.target as HTMLSelectElement).value)"
-                    >
-                      <option value="active">Active</option>
-                      <option value="paused">Paused</option>
-                      <option value="error">Error</option>
-                      <option value="dead">Dead</option>
-                    </select>
-                    <button class="btn-danger text-xs py-1 px-2" @click="deleteFeed(feed.id)">
-                      Delete
-                    </button>
-                  </div>
+                  <button
+                    class="btn-ghost text-xs flex items-center gap-1"
+                    @click="openManageModal(feed)"
+                  >
+                    <Cog6ToothIcon class="h-3.5 w-3.5" />
+                    Manage
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -613,5 +666,169 @@ onMounted(() => {
         </table>
       </div>
     </div>
+
+    <!-- Manage Feed Modal -->
+    <TransitionRoot :show="showManageModal" as="template">
+      <Dialog class="relative z-50" @close="closeManageModal">
+        <TransitionChild
+          enter="ease-out duration-200"
+          enter-from="opacity-0"
+          enter-to="opacity-100"
+          leave="ease-in duration-150"
+          leave-from="opacity-100"
+          leave-to="opacity-0"
+        >
+          <div class="fixed inset-0 bg-black/40" />
+        </TransitionChild>
+
+        <div class="fixed inset-0 flex items-center justify-center p-4">
+          <TransitionChild
+            enter="ease-out duration-200"
+            enter-from="opacity-0 scale-95"
+            enter-to="opacity-100 scale-100"
+            leave="ease-in duration-150"
+            leave-from="opacity-100 scale-100"
+            leave-to="opacity-0 scale-95"
+          >
+            <DialogPanel v-if="managedFeed" class="w-full max-w-lg rounded-xl border bg-bg-primary p-6 shadow-xl max-h-[85vh] overflow-y-auto">
+              <!-- Header -->
+              <div class="flex items-start justify-between mb-5">
+                <DialogTitle class="text-lg font-semibold text-text-primary">Manage Feed</DialogTitle>
+                <button class="text-text-muted hover:text-text-primary" @click="closeManageModal">
+                  <XMarkIcon class="h-5 w-5" />
+                </button>
+              </div>
+
+              <!-- Feed identity -->
+              <div class="flex items-center gap-3 mb-5">
+                <img
+                  v-if="managedFeed.favicon_url && !managedFaviconError"
+                  :src="managedFeed.favicon_url"
+                  alt=""
+                  class="h-10 w-10 rounded-lg shrink-0"
+                  @error="managedFaviconError = true"
+                />
+                <div v-else class="flex h-10 w-10 items-center justify-center rounded-lg bg-bg-tertiary shrink-0">
+                  <RssIcon class="h-5 w-5 text-text-muted" />
+                </div>
+                <div class="min-w-0">
+                  <p class="font-semibold text-text-primary truncate">{{ managedFeed.title || 'Untitled' }}</p>
+                  <a
+                    v-if="managedFeed.site_url"
+                    :href="managedFeed.site_url"
+                    target="_blank"
+                    class="text-xs text-accent hover:underline truncate block"
+                  >{{ managedFeed.site_url }}</a>
+                </div>
+              </div>
+
+              <!-- Info grid -->
+              <div class="rounded-lg border bg-bg-secondary/50 p-4 mb-5 space-y-3 text-sm">
+                <div>
+                  <p class="text-xs font-medium text-text-muted mb-0.5">Feed URL</p>
+                  <p class="text-text-primary break-all text-xs">{{ managedFeed.url }}</p>
+                </div>
+                <div v-if="managedFeed.description">
+                  <p class="text-xs font-medium text-text-muted mb-0.5">Description</p>
+                  <p class="text-text-secondary text-xs line-clamp-3">{{ managedFeed.description }}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <p class="text-xs font-medium text-text-muted mb-0.5">Subscribers</p>
+                    <p class="text-text-primary">{{ managedFeed.subscriber_count }}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs font-medium text-text-muted mb-0.5">Last Fetched</p>
+                    <p class="text-text-primary" :title="managedFeed.last_fetched_at ? new Date(managedFeed.last_fetched_at).toLocaleString() : ''">
+                      {{ timeAgo(managedFeed.last_fetched_at) }}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs font-medium text-text-muted mb-0.5">Failures</p>
+                    <p :class="managedFeed.consecutive_failures > 0 ? 'text-danger' : 'text-text-primary'">
+                      {{ managedFeed.consecutive_failures }}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs font-medium text-text-muted mb-0.5">Added</p>
+                    <p class="text-text-primary">{{ new Date(managedFeed.created_at).toLocaleDateString() }}</p>
+                  </div>
+                </div>
+                <div v-if="managedFeed.last_error_message">
+                  <p class="text-xs font-medium text-text-muted mb-0.5">Last Error</p>
+                  <p class="text-danger text-xs">{{ managedFeed.last_error_message }}</p>
+                </div>
+              </div>
+
+              <!-- Editable fields -->
+              <div class="space-y-4 mb-5">
+                <div>
+                  <label class="block text-xs font-medium text-text-secondary mb-1">Status</label>
+                  <select
+                    class="input text-sm"
+                    :value="managedFeed.status"
+                    @change="updateManagedField('status', ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="error">Error</option>
+                    <option value="dead">Dead</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-text-secondary mb-1">Category</label>
+                  <select
+                    class="input text-sm"
+                    :value="managedFeed.category"
+                    @change="updateManagedField('category', ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option v-for="cat in FEED_CATEGORIES" :key="cat.value" :value="cat.value">
+                      {{ cat.label }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Icon management -->
+              <div class="mb-5">
+                <label class="block text-xs font-medium text-text-secondary mb-2">Feed Icon</label>
+                <div class="flex items-center gap-3">
+                  <div class="flex h-8 w-8 items-center justify-center rounded-lg border bg-bg-secondary shrink-0">
+                    <img
+                      v-if="managedFeed.favicon_url && !managedFaviconError"
+                      :src="managedFeed.favicon_url"
+                      alt=""
+                      class="h-6 w-6 rounded"
+                      @error="managedFaviconError = true"
+                    />
+                    <RssIcon v-else class="h-4 w-4 text-text-muted" />
+                  </div>
+                  <button
+                    class="btn-ghost text-xs flex items-center gap-1.5"
+                    :disabled="refetchingIcon"
+                    @click="refetchFavicon"
+                  >
+                    <ArrowPathIcon class="h-3.5 w-3.5" :class="refetchingIcon ? 'animate-spin' : ''" />
+                    {{ refetchingIcon ? 'Fetching...' : 'Refetch Icon' }}
+                  </button>
+                  <span class="text-xs text-text-muted">Uses Google favicon service</span>
+                </div>
+              </div>
+
+              <!-- Danger zone -->
+              <div class="border-t pt-4">
+                <button
+                  class="btn-danger text-sm px-4 py-2"
+                  @click="deleteManagedFeed"
+                >
+                  Delete Feed
+                </button>
+                <p class="text-xs text-text-muted mt-1">Permanently delete this feed and all its entries.</p>
+              </div>
+            </DialogPanel>
+          </TransitionChild>
+        </div>
+      </Dialog>
+    </TransitionRoot>
   </div>
 </template>

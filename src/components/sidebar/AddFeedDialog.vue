@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   Dialog,
   DialogPanel,
@@ -12,6 +12,7 @@ import { useFeedStore } from '@/stores/feeds'
 import { useNotificationStore } from '@/stores/notifications'
 import { FEED_CATEGORIES } from '@/config/constants'
 import { addFeed, importOPML } from '@/services/feeds.service'
+import { detectPlatformHint } from '@/utils/platformDetect'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -25,6 +26,8 @@ const isPrivate = ref(false)
 const loading = ref(false)
 const opmlFile = ref<File | null>(null)
 const mode = ref<'url' | 'opml'>('url')
+
+const platformHint = computed(() => detectPlatformHint(feedUrl.value))
 
 watch(
   () => props.open,
@@ -46,7 +49,8 @@ async function handleAddFeed() {
     const result = await addFeed(feedUrl.value.trim(), category.value, isPrivate.value)
     // Subscribe to the feed
     await feedStore.subscribeFeed(result.id)
-    notifications.success(result.created ? 'Feed added and subscribed!' : 'Subscribed to existing feed!')
+    const platformName = result.platform ? ` (${result.platform})` : ''
+    notifications.success(result.created ? `Feed added and subscribed!${platformName}` : 'Subscribed to existing feed!')
     emit('close')
   } catch (e: any) {
     if (e?.code === '23505' || e?.message?.includes('subscriptions_unique')) {
@@ -150,10 +154,22 @@ function onFileChange(e: Event) {
                   <input
                     v-model="feedUrl"
                     type="url"
-                    placeholder="https://example.com/feed.xml"
+                    placeholder="Paste any URL — feed, YouTube, Reddit, GitHub..."
                     class="input pl-9"
                     required
                   />
+                </div>
+                <!-- Platform hint -->
+                <div
+                  v-if="platformHint"
+                  class="mt-1.5 flex items-center gap-1.5"
+                >
+                  <span
+                    class="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent"
+                  >
+                    {{ platformHint.label }}
+                  </span>
+                  <span class="text-xs text-text-muted">{{ platformHint.description }}</span>
                 </div>
               </div>
 
@@ -172,7 +188,7 @@ function onFileChange(e: Event) {
               </label>
 
               <button type="submit" class="btn-primary w-full" :disabled="loading || !feedUrl">
-                {{ loading ? 'Adding...' : 'Add Feed' }}
+                {{ loading && platformHint ? `Resolving ${platformHint.label}...` : loading ? 'Adding...' : 'Add Feed' }}
               </button>
             </form>
 

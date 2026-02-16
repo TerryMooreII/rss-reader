@@ -91,12 +91,38 @@ watch(() => entryStore.filter, () => {
     </div>
 
     <!-- Loading skeleton -->
-    <div v-else-if="entryStore.loading" class="space-y-0">
-      <div v-for="i in 10" :key="i" class="animate-pulse border-b px-4 py-3">
-        <div class="flex items-center gap-3">
-          <div class="h-4 w-4 rounded bg-bg-tertiary" />
-          <div class="h-4 flex-1 rounded bg-bg-tertiary" />
-          <div class="h-3 w-12 rounded bg-bg-tertiary" />
+    <div v-else-if="entryStore.loading">
+      <!-- Feed mode skeleton -->
+      <div v-if="isFeedMode" class="mx-auto max-w-2xl">
+        <div v-for="i in 6" :key="i" class="animate-pulse border-b border-border px-4 py-4">
+          <!-- Header: favicon + feed name + time -->
+          <div class="flex items-center gap-2 mb-2">
+            <div class="h-5 w-5 shrink-0 rounded bg-bg-tertiary" />
+            <div class="h-3 w-24 rounded bg-bg-tertiary" />
+            <div class="ml-auto h-3 w-12 rounded bg-bg-tertiary" />
+          </div>
+          <!-- Title -->
+          <div class="h-4 w-3/4 rounded bg-bg-tertiary mb-2" />
+          <!-- Excerpt + thumbnail -->
+          <div class="flex gap-3">
+            <div class="flex-1 space-y-2">
+              <div class="h-3 w-full rounded bg-bg-tertiary" />
+              <div class="h-3 w-full rounded bg-bg-tertiary" />
+              <div class="h-3 w-2/3 rounded bg-bg-tertiary" />
+            </div>
+            <div class="h-20 w-28 shrink-0 rounded-lg bg-bg-tertiary" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Compact / Cozy skeleton -->
+      <div v-else>
+        <div v-for="i in 10" :key="i" class="animate-pulse border-b px-4 py-3">
+          <div class="flex items-center gap-3">
+            <div class="h-4 w-4 rounded bg-bg-tertiary" />
+            <div class="h-4 flex-1 rounded bg-bg-tertiary" />
+            <div class="h-3 w-12 rounded bg-bg-tertiary" />
+          </div>
         </div>
       </div>
     </div>
