@@ -413,6 +413,33 @@ export const useEntryStore = defineStore('entries', () => {
     }
   }
 
+  /**
+   * Re-fetches the current page of entries without clearing the list or
+   * resetting scroll position. Used for background refresh (e.g. tab return).
+   */
+  async function silentRefresh(): Promise<void> {
+    if (loading.value || loadingMore.value) return
+
+    try {
+      const ui = useUIStore()
+      const cursor = pageCursors[currentPage.value - 1] ?? undefined
+
+      if (filter.value.type === 'search') {
+        searchOffset = (currentPage.value - 1) * ui.entriesPerPage
+      }
+
+      const rows = await _callRpc(filter.value, cursor)
+      entries.value = rows
+      hasMore.value = rows.length >= ui.entriesPerPage
+
+      if (filter.value.type === 'search') {
+        searchOffset = (currentPage.value - 1) * ui.entriesPerPage + rows.length
+      }
+    } catch {
+      // Silent refresh is best-effort; don't overwrite existing error state
+    }
+  }
+
   function selectNext(): void {
     if (entries.value.length === 0) return
 
@@ -455,6 +482,7 @@ export const useEntryStore = defineStore('entries', () => {
     toggleRead,
     toggleStar,
     markAllRead,
+    silentRefresh,
     selectEntry,
     selectNext,
     selectPrevious,

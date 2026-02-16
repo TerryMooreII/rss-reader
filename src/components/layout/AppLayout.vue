@@ -179,7 +179,7 @@ async function refetchAllData() {
     await Promise.all([
       feedStore.fetchFeeds(),
       groupStore.fetchGroups(),
-      entryStore.fetchEntries(entryStore.filter),
+      entryStore.silentRefresh(),
     ])
   } catch {
     // Recovery is best-effort; errors surface in individual stores
