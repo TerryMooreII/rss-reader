@@ -105,6 +105,14 @@ async function toggleFeedInGroup(e: Event, groupId: string) {
   }
 }
 
+// Drag-and-drop (drag source)
+function onDragStart(e: DragEvent) {
+  if (!props.feed) return
+  e.dataTransfer!.effectAllowed = 'copy'
+  e.dataTransfer!.setData('application/x-feed-id', props.feed.id)
+  e.dataTransfer!.setData('text/plain', props.feed.custom_title || props.feed.title || 'Feed')
+}
+
 // Close menu on outside click
 const menuEl = ref<HTMLElement | null>(null)
 
@@ -120,7 +128,7 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
 </script>
 
 <template>
-  <div v-if="feed" class="relative group">
+  <div v-if="feed" class="relative group" draggable="true" @dragstart="onDragStart">
     <RouterLink
       :to="{ name: 'feed-entries', params: { feedId: feed.id } }"
       :class="isActive ? 'sidebar-item-active' : 'sidebar-item'"
