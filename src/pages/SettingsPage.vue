@@ -68,6 +68,7 @@ async function saveSettings() {
         notify_new_entries: settings.value.notify_new_entries,
         notify_email: settings.value.notify_email,
         entries_per_page: settings.value.entries_per_page,
+        pagination_mode: settings.value.pagination_mode,
       })
       .eq('user_id', authStore.user?.id)
     if (error) throw error
@@ -78,6 +79,8 @@ async function saveSettings() {
     if (settings.value.display_mode) {
       ui.setDisplayMode(settings.value.display_mode)
     }
+    ui.setPaginationMode(settings.value.pagination_mode)
+    ui.setEntriesPerPage(settings.value.entries_per_page)
     notifications.success('Settings saved')
   } catch (e: any) {
     notifications.error('Failed to save settings')
@@ -244,6 +247,53 @@ const shortcuts = [
               @click="settings.display_mode = 'feed'"
             >
               Feed
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-text-secondary mb-2">Pagination</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+              :class="
+                settings.pagination_mode === 'infinite'
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'hover:bg-bg-hover text-text-secondary'
+              "
+              @click="settings.pagination_mode = 'infinite'"
+            >
+              Infinite Scroll
+            </button>
+            <button
+              class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+              :class="
+                settings.pagination_mode === 'paginated'
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'hover:bg-bg-hover text-text-secondary'
+              "
+              @click="settings.pagination_mode = 'paginated'"
+            >
+              Paginated
+            </button>
+          </div>
+        </div>
+
+        <div v-if="settings.pagination_mode === 'paginated'">
+          <label class="block text-sm font-medium text-text-secondary mb-2">Entries Per Page</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              v-for="size in [10, 25, 50]"
+              :key="size"
+              class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+              :class="
+                settings.entries_per_page === size
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'hover:bg-bg-hover text-text-secondary'
+              "
+              @click="settings.entries_per_page = size"
+            >
+              {{ size }}
             </button>
           </div>
         </div>

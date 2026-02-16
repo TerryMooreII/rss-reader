@@ -35,7 +35,7 @@ const isRead = computed(() => !!props.entry.read_at)
     class="flex items-center gap-3 border-b px-4 py-2.5 cursor-pointer transition-colors"
     :class="[
       selected ? 'bg-bg-active' : 'hover:bg-bg-hover',
-      isRead ? 'opacity-70' : '',
+      isRead ? 'opacity-80' : '',
     ]"
     @click="$emit('click')"
   >

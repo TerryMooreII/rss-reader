@@ -22,6 +22,7 @@ export interface UserSettings {
   notify_new_entries: boolean
   notify_email: boolean
   default_sort_order: 'newest_first' | 'oldest_first'
+  pagination_mode: 'infinite' | 'paginated'
 }
 
 export interface Feed {

@@ -17,6 +17,7 @@ let observer: IntersectionObserver | null = null
 const expandedEntryId = ref<string | null>(null)
 
 const isFeedMode = computed(() => ui.displayMode === 'feed')
+const isPaginated = computed(() => ui.paginationMode === 'paginated')
 
 const component = computed(() => {
   if (ui.displayMode === 'compact') return EntryListItem
@@ -39,14 +40,19 @@ function handleIntersect(entries: IntersectionObserverEntry[]) {
   }
 }
 
-onMounted(() => {
-  if (sentinel.value) {
+function setupObserver() {
+  observer?.disconnect()
+  if (!isPaginated.value && sentinel.value) {
     observer = new IntersectionObserver(handleIntersect, {
       root: scrollContainer.value,
       rootMargin: '0px 0px 200px 0px',
     })
     observer.observe(sentinel.value)
   }
+}
+
+onMounted(() => {
+  setupObserver()
 })
 
 onUnmounted(() => {
@@ -57,12 +63,22 @@ onUnmounted(() => {
 watch(
   () => entryStore.entries.length,
   () => {
-    if (sentinel.value && observer) {
+    if (!isPaginated.value && sentinel.value && observer) {
       observer.disconnect()
       observer.observe(sentinel.value)
     }
   },
 )
+
+// Reconnect/disconnect observer when pagination mode changes
+watch(isPaginated, () => {
+  setupObserver()
+})
+
+async function goToPage(direction: 'next' | 'prev') {
+  await entryStore.fetchPage(direction)
+  scrollContainer.value?.scrollTo({ top: 0 })
+}
 
 // Reset expanded entry when switching modes or filters
 watch(() => ui.displayMode, () => {
@@ -155,12 +171,49 @@ watch(() => entryStore.filter, () => {
       </template>
     </div>
 
-    <!-- Infinite scroll sentinel -->
-    <div ref="sentinel" class="h-px" />
+    <!-- Infinite scroll sentinel (hidden in paginated mode) -->
+    <div v-if="!isPaginated" ref="sentinel" class="h-px" />
 
-    <!-- Loading more indicator -->
-    <div v-if="entryStore.loadingMore" class="flex justify-center py-4">
+    <!-- Loading more indicator (infinite scroll) -->
+    <div v-if="!isPaginated && entryStore.loadingMore" class="flex justify-center py-4">
       <div class="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+    </div>
+
+    <!-- Pagination controls -->
+    <div
+      v-if="isPaginated && !entryStore.loading && entryStore.entries.length > 0"
+      class="flex items-center justify-between border-t border-border px-4 py-3"
+      :class="isFeedMode ? 'mx-auto max-w-2xl' : ''"
+    >
+      <button
+        class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+        :class="
+          entryStore.hasPrevious
+            ? 'text-text-primary hover:bg-bg-hover'
+            : 'text-text-muted cursor-not-allowed'
+        "
+        :disabled="!entryStore.hasPrevious || entryStore.loading"
+        @click="goToPage('prev')"
+      >
+        Previous
+      </button>
+
+      <span class="text-sm text-text-secondary">
+        Page {{ entryStore.currentPage }}
+      </span>
+
+      <button
+        class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+        :class="
+          entryStore.hasMore
+            ? 'text-text-primary hover:bg-bg-hover'
+            : 'text-text-muted cursor-not-allowed'
+        "
+        :disabled="!entryStore.hasMore || entryStore.loading"
+        @click="goToPage('next')"
+      >
+        Next
+      </button>
     </div>
   </div>
 </template>

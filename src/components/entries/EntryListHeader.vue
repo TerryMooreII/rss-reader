@@ -24,7 +24,7 @@ function cycleDisplayMode() {
 </script>
 
 <template>
-  <div class="flex h-12 items-center justify-between border-b px-4 shrink-0">
+  <div class="flex h-14 items-center justify-between border-b px-4 shrink-0">
     <div class="flex items-center gap-2">
       <button
         class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary md:hidden"

@@ -131,7 +131,7 @@ function collapse(e: Event) {
     class="border-b border-border cursor-pointer transition-colors"
     :class="[
       expanded ? 'bg-bg-secondary/50' : 'hover:bg-bg-hover',
-      isRead && !expanded ? 'opacity-70' : '',
+      isRead && !expanded ? 'opacity-80' : '',
     ]"
     @click="$emit('click')"
   >

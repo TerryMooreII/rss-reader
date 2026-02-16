@@ -1,7 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
-import { PAGE_SIZE } from '@/config/constants'
 import type { Entry, EntryFilter } from '@/types/models'
 import { useFeedStore } from './feeds'
 import { useAuthStore } from './auth'
@@ -29,6 +28,11 @@ export const useEntryStore = defineStore('entries', () => {
   // For search offset-based pagination
   let searchOffset = 0
 
+  // Page-based pagination state
+  const currentPage = ref(1)
+  // Stores the cursor needed to fetch each page (index 0 = page 1 = no cursor)
+  const pageCursors: Array<{ published_at: string; starred_at?: string | null; id: string } | null> = [null]
+
   // Auto-mark-read timer handle
   let markReadTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -45,6 +49,8 @@ export const useEntryStore = defineStore('entries', () => {
     if (!selectedEntryId.value) return -1
     return entries.value.findIndex((e) => e.id === selectedEntryId.value)
   })
+
+  const hasPrevious = computed(() => currentPage.value > 1)
 
   // ---------------------------------------------------------------------------
   // Internal helpers
@@ -64,9 +70,11 @@ export const useEntryStore = defineStore('entries', () => {
     cursor?: { published_at: string; starred_at?: string | null; id: string },
   ): Promise<Entry[]> {
     const userId = _getUserId()
+    const ui = useUIStore()
+    const limit = ui.entriesPerPage
 
     let rpcName: string
-    const params: Record<string, unknown> = { p_user_id: userId, p_limit: PAGE_SIZE }
+    const params: Record<string, unknown> = { p_user_id: userId, p_limit: limit }
 
     switch (f.type) {
       case 'feed':
@@ -143,17 +151,21 @@ export const useEntryStore = defineStore('entries', () => {
   // ---------------------------------------------------------------------------
 
   async function fetchEntries(newFilter: EntryFilter): Promise<void> {
+    const ui = useUIStore()
     loading.value = true
     error.value = null
     filter.value = newFilter
     entries.value = []
     selectedEntryId.value = null
     searchOffset = 0
+    currentPage.value = 1
+    pageCursors.length = 1
+    pageCursors[0] = null
 
     try {
       const rows = await _callRpc(newFilter)
       entries.value = rows
-      hasMore.value = rows.length >= PAGE_SIZE
+      hasMore.value = rows.length >= ui.entriesPerPage
       if (newFilter.type === 'search') {
         searchOffset = rows.length
       }
@@ -187,8 +199,9 @@ export const useEntryStore = defineStore('entries', () => {
         rows = await _callRpc(filter.value, cursor)
       }
 
+      const ui = useUIStore()
       entries.value.push(...rows)
-      hasMore.value = rows.length >= PAGE_SIZE
+      hasMore.value = rows.length >= ui.entriesPerPage
       if (filter.value.type === 'search') {
         searchOffset += rows.length
       }
@@ -196,6 +209,61 @@ export const useEntryStore = defineStore('entries', () => {
       error.value = err instanceof Error ? err.message : 'Failed to load more entries'
     } finally {
       loadingMore.value = false
+    }
+  }
+
+  async function fetchPage(direction: 'next' | 'prev'): Promise<void> {
+    const ui = useUIStore()
+
+    if (direction === 'next' && !hasMore.value) return
+    if (direction === 'prev' && currentPage.value <= 1) return
+
+    loading.value = true
+    error.value = null
+    selectedEntryId.value = null
+
+    try {
+      if (direction === 'next') {
+        // Save the cursor for the next page
+        const lastEntry = entries.value[entries.value.length - 1]!
+        const nextCursor = {
+          published_at: lastEntry.published_at ?? lastEntry.created_at,
+          starred_at: lastEntry.starred_at,
+          id: lastEntry.id,
+        }
+        currentPage.value++
+        pageCursors[currentPage.value - 1] = nextCursor
+
+        if (filter.value.type === 'search') {
+          searchOffset = (currentPage.value - 1) * ui.entriesPerPage
+          const rows = await _callRpc(filter.value)
+          entries.value = rows
+          hasMore.value = rows.length >= ui.entriesPerPage
+        } else {
+          const rows = await _callRpc(filter.value, nextCursor)
+          entries.value = rows
+          hasMore.value = rows.length >= ui.entriesPerPage
+        }
+      } else {
+        // Go to previous page using saved cursor
+        currentPage.value--
+        const cursor = pageCursors[currentPage.value - 1] ?? undefined
+
+        if (filter.value.type === 'search') {
+          searchOffset = (currentPage.value - 1) * ui.entriesPerPage
+          const rows = await _callRpc(filter.value)
+          entries.value = rows
+          hasMore.value = rows.length >= ui.entriesPerPage
+        } else {
+          const rows = await _callRpc(filter.value, cursor ?? undefined)
+          entries.value = rows
+          hasMore.value = rows.length >= ui.entriesPerPage
+        }
+      }
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to load page'
+    } finally {
+      loading.value = false
     }
   }
 
@@ -374,12 +442,15 @@ export const useEntryStore = defineStore('entries', () => {
     hasMore,
     filter,
     error,
+    currentPage,
     // Getters
     selectedEntry,
     selectedIndex,
+    hasPrevious,
     // Actions
     fetchEntries,
     fetchMore,
+    fetchPage,
     markRead,
     toggleRead,
     toggleStar,

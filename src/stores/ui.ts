@@ -3,11 +3,14 @@ import { defineStore } from 'pinia'
 
 type Theme = 'light' | 'dark' | 'midnight' | 'forest'
 type DisplayMode = 'comfortable' | 'compact' | 'feed'
+type PaginationMode = 'infinite' | 'paginated'
 
 const LS_THEME = 'acta:theme'
 const LS_DISPLAY_MODE = 'acta:displayMode'
 const LS_SIDEBAR_OPEN = 'acta:sidebarOpen'
 const LS_LIST_WIDTH = 'acta:listWidth'
+const LS_PAGINATION_MODE = 'acta:paginationMode'
+const LS_ENTRIES_PER_PAGE = 'acta:entriesPerPage'
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -31,6 +34,10 @@ export const useUIStore = defineStore('ui', () => {
     window.innerWidth < 768 ? false : loadFromStorage<boolean>(LS_SIDEBAR_OPEN, true),
   )
   const listWidth = ref<number>(loadFromStorage<number>(LS_LIST_WIDTH, 380))
+  const paginationMode = ref<PaginationMode>(
+    loadFromStorage<PaginationMode>(LS_PAGINATION_MODE, 'infinite'),
+  )
+  const entriesPerPage = ref<number>(loadFromStorage<number>(LS_ENTRIES_PER_PAGE, 25))
 
   // Transient UI state (not persisted)
   const readerOpen = ref(false)
@@ -44,6 +51,8 @@ export const useUIStore = defineStore('ui', () => {
   watch(displayMode, (val) => localStorage.setItem(LS_DISPLAY_MODE, JSON.stringify(val)))
   watch(sidebarOpen, (val) => localStorage.setItem(LS_SIDEBAR_OPEN, JSON.stringify(val)))
   watch(listWidth, (val) => localStorage.setItem(LS_LIST_WIDTH, JSON.stringify(val)))
+  watch(paginationMode, (val) => localStorage.setItem(LS_PAGINATION_MODE, JSON.stringify(val)))
+  watch(entriesPerPage, (val) => localStorage.setItem(LS_ENTRIES_PER_PAGE, JSON.stringify(val)))
 
   // Apply the theme class to the document whenever it changes
   watch(
@@ -82,6 +91,14 @@ export const useUIStore = defineStore('ui', () => {
     listWidth.value = Math.max(280, Math.min(width, 700))
   }
 
+  function setPaginationMode(mode: PaginationMode): void {
+    paginationMode.value = mode
+  }
+
+  function setEntriesPerPage(count: number): void {
+    entriesPerPage.value = count
+  }
+
   function openReader(): void {
     readerOpen.value = true
   }
@@ -104,6 +121,8 @@ export const useUIStore = defineStore('ui', () => {
     displayMode,
     sidebarOpen,
     listWidth,
+    paginationMode,
+    entriesPerPage,
     readerOpen,
     searchOpen,
     shortcutsDialogOpen,
@@ -113,6 +132,8 @@ export const useUIStore = defineStore('ui', () => {
     closeSidebar,
     setDisplayMode,
     setListWidth,
+    setPaginationMode,
+    setEntriesPerPage,
     openReader,
     closeReader,
     toggleSearch,
