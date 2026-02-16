@@ -2,7 +2,7 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
-import DOMPurify from 'dompurify'
+import { sanitizeHtml } from '@/utils/sanitize'
 import {
   ArrowTopRightOnSquareIcon,
   StarIcon as StarOutline,
@@ -59,10 +59,7 @@ const sanitizedContent = computed(() => {
   if (media.value?.type === 'youtube') {
     html = html.replace(/<iframe[^>]*youtube(?:-nocookie)?\.com\/embed\/[^>]*>[\s\S]*?<\/iframe>/gi, '')
   }
-  return DOMPurify.sanitize(html, {
-    ADD_TAGS: ['iframe'],
-    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'srcset', 'sizes', 'loading'],
-  })
+  return sanitizeHtml(html)
 })
 
 const timeAgo = computed(() => {

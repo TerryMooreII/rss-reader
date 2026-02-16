@@ -35,6 +35,11 @@ const feeds = ref<Feed[]>([])
 const users = ref<UserProfile[]>([])
 const loading = ref(false)
 
+// Dashboard stats (independent of filters)
+const statsTotalFeeds = ref(0)
+const statsActiveFeeds = ref(0)
+const statsFailingFeeds = ref(0)
+
 // Feed table controls
 const categoryFilter = ref('')
 const sortColumn = ref<string>('created_at')
@@ -84,6 +89,7 @@ interface CronRun {
 const cronRuns = ref<CronRun[]>([])
 
 // Admin import state
+const showImportModal = ref(false)
 const importUrl = ref('')
 const importCategory = ref('other')
 const importLoading = ref(false)
@@ -127,6 +133,17 @@ async function loadFeeds() {
     totalFeeds.value = count ?? 0
   }
   loading.value = false
+}
+
+async function loadStats() {
+  const [totalRes, activeRes, failingRes] = await Promise.all([
+    supabase.from('feeds').select('*', { count: 'exact', head: true }),
+    supabase.from('feeds').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabase.from('feeds').select('*', { count: 'exact', head: true }).in('status', ['error', 'dead']),
+  ])
+  statsTotalFeeds.value = totalRes.count ?? 0
+  statsActiveFeeds.value = activeRes.count ?? 0
+  statsFailingFeeds.value = failingRes.count ?? 0
 }
 
 async function loadUsers() {
@@ -224,6 +241,7 @@ async function deleteManagedFeed() {
     totalFeeds.value--
     closeManageModal()
     notifications.success('Feed deleted')
+    loadStats()
   } catch (e: any) {
     notifications.error(e.message || 'Failed to delete feed')
   }
@@ -239,7 +257,7 @@ async function handleAdminAddFeed() {
     )
     importUrl.value = ''
     importCategory.value = 'other'
-    await loadFeeds()
+    await Promise.all([loadFeeds(), loadStats()])
   } catch (e: any) {
     notifications.error(e.message || 'Failed to add feed')
   } finally {
@@ -253,7 +271,7 @@ function onOpmlFileChange(e: Event) {
 }
 
 async function loadCronHistory() {
-  const { data, error } = await supabase.rpc('get_cron_run_history', { p_limit: 50 })
+  const { data, error } = await supabase.rpc('get_cron_run_history', { p_limit: 10 })
   if (!error) cronRuns.value = (data || []) as CronRun[]
 }
 
@@ -266,7 +284,7 @@ async function handleAdminImportOPML() {
       `Imported ${result.feeds_added} feeds to catalog (${result.feeds_skipped} already existed)`,
     )
     opmlFile.value = null
-    await loadFeeds()
+    await Promise.all([loadFeeds(), loadStats()])
   } catch (e: any) {
     notifications.error(e.message || 'Failed to import OPML')
   } finally {
@@ -276,6 +294,7 @@ async function handleAdminImportOPML() {
 
 onMounted(() => {
   loadFeeds()
+  loadStats()
   loadUsers()
   loadCronHistory()
 })
@@ -292,88 +311,32 @@ onMounted(() => {
           <Bars3Icon class="h-5 w-5" />
         </button>
         <h1 class="text-2xl font-bold text-text-primary">Admin Dashboard</h1>
+        <button
+          class="btn-primary text-sm py-1.5 px-3 flex items-center gap-1.5 ml-auto"
+          @click="showImportModal = true"
+        >
+          <ArrowUpTrayIcon class="h-4 w-4" />
+          Import Feeds
+        </button>
       </div>
 
       <!-- Stats -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div class="rounded-lg border bg-bg-secondary p-4">
-          <p class="text-2xl font-bold text-text-primary">{{ totalFeeds }}</p>
+          <p class="text-2xl font-bold text-text-primary">{{ statsTotalFeeds }}</p>
           <p class="text-xs text-text-muted">Total Feeds</p>
         </div>
         <div class="rounded-lg border bg-bg-secondary p-4">
-          <p class="text-2xl font-bold text-text-primary">
-            {{ feeds.filter((f) => f.status === 'active').length }}
-          </p>
+          <p class="text-2xl font-bold text-text-primary">{{ statsActiveFeeds }}</p>
           <p class="text-xs text-text-muted">Active Feeds</p>
         </div>
         <div class="rounded-lg border bg-bg-secondary p-4">
-          <p class="text-2xl font-bold text-text-primary">
-            {{ feeds.filter((f) => f.status === 'error' || f.status === 'dead').length }}
-          </p>
+          <p class="text-2xl font-bold text-text-primary">{{ statsFailingFeeds }}</p>
           <p class="text-xs text-text-muted">Failing Feeds</p>
         </div>
         <div class="rounded-lg border bg-bg-secondary p-4">
           <p class="text-2xl font-bold text-text-primary">{{ users.length }}</p>
           <p class="text-xs text-text-muted">Users</p>
-        </div>
-      </div>
-
-      <!-- Import Feeds to Catalog -->
-      <div class="mb-6 rounded-lg border bg-bg-secondary p-4">
-        <h2 class="text-sm font-semibold text-text-primary mb-3">Import Feeds to Catalog</h2>
-        <p class="text-xs text-text-muted mb-4">
-          Add feeds to the system without subscribing your account.
-        </p>
-
-        <!-- Add by URL -->
-        <form class="flex flex-wrap items-end gap-2 mb-3" @submit.prevent="handleAdminAddFeed">
-          <div class="flex-1 min-w-[200px]">
-            <label class="block text-xs font-medium text-text-secondary mb-1">Feed URL</label>
-            <input
-              v-model="importUrl"
-              type="url"
-              placeholder="https://example.com/feed.xml"
-              class="input text-sm"
-              required
-            />
-          </div>
-          <div class="w-40">
-            <label class="block text-xs font-medium text-text-secondary mb-1">Category</label>
-            <select v-model="importCategory" class="input text-sm">
-              <option v-for="cat in FEED_CATEGORIES" :key="cat.value" :value="cat.value">
-                {{ cat.label }}
-              </option>
-            </select>
-          </div>
-          <button
-            type="submit"
-            class="btn-primary text-sm py-2 px-3 flex items-center gap-1.5"
-            :disabled="importLoading || !importUrl"
-          >
-            <PlusIcon class="h-4 w-4" />
-            {{ importLoading ? 'Adding...' : 'Add Feed' }}
-          </button>
-        </form>
-
-        <!-- Import OPML -->
-        <div class="flex flex-wrap items-end gap-2 border-t border-border pt-3">
-          <div class="flex-1 min-w-[200px]">
-            <label class="block text-xs font-medium text-text-secondary mb-1">OPML File</label>
-            <input
-              type="file"
-              accept=".opml,.xml"
-              class="input text-sm"
-              @change="onOpmlFileChange"
-            />
-          </div>
-          <button
-            class="btn-primary text-sm py-2 px-3 flex items-center gap-1.5"
-            :disabled="opmlLoading || !opmlFile"
-            @click="handleAdminImportOPML"
-          >
-            <ArrowUpTrayIcon class="h-4 w-4" />
-            {{ opmlLoading ? 'Importing...' : 'Import OPML' }}
-          </button>
         </div>
       </div>
 
@@ -824,6 +787,97 @@ onMounted(() => {
                   Delete Feed
                 </button>
                 <p class="text-xs text-text-muted mt-1">Permanently delete this feed and all its entries.</p>
+              </div>
+            </DialogPanel>
+          </TransitionChild>
+        </div>
+      </Dialog>
+    </TransitionRoot>
+
+    <!-- Import Feeds Modal -->
+    <TransitionRoot :show="showImportModal" as="template">
+      <Dialog class="relative z-50" @close="showImportModal = false">
+        <TransitionChild
+          enter="ease-out duration-200"
+          enter-from="opacity-0"
+          enter-to="opacity-100"
+          leave="ease-in duration-150"
+          leave-from="opacity-100"
+          leave-to="opacity-0"
+        >
+          <div class="fixed inset-0 bg-black/40" />
+        </TransitionChild>
+
+        <div class="fixed inset-0 flex items-center justify-center p-4">
+          <TransitionChild
+            enter="ease-out duration-200"
+            enter-from="opacity-0 scale-95"
+            enter-to="opacity-100 scale-100"
+            leave="ease-in duration-150"
+            leave-from="opacity-100 scale-100"
+            leave-to="opacity-0 scale-95"
+          >
+            <DialogPanel class="w-full max-w-md rounded-xl border bg-bg-primary p-6 shadow-xl">
+              <!-- Header -->
+              <div class="flex items-start justify-between mb-4">
+                <div>
+                  <DialogTitle class="text-lg font-semibold text-text-primary">Import Feeds to Catalog</DialogTitle>
+                  <p class="text-xs text-text-muted mt-1">Add feeds to the system without subscribing your account.</p>
+                </div>
+                <button class="text-text-muted hover:text-text-primary" @click="showImportModal = false">
+                  <XMarkIcon class="h-5 w-5" />
+                </button>
+              </div>
+
+              <!-- Add by URL -->
+              <form class="space-y-3 mb-5" @submit.prevent="handleAdminAddFeed">
+                <div>
+                  <label class="block text-xs font-medium text-text-secondary mb-1">Feed URL</label>
+                  <input
+                    v-model="importUrl"
+                    type="url"
+                    placeholder="https://example.com/feed.xml"
+                    class="input text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-text-secondary mb-1">Category</label>
+                  <select v-model="importCategory" class="input text-sm">
+                    <option v-for="cat in FEED_CATEGORIES" :key="cat.value" :value="cat.value">
+                      {{ cat.label }}
+                    </option>
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  class="btn-primary text-sm py-2 px-3 w-full flex items-center justify-center gap-1.5"
+                  :disabled="importLoading || !importUrl"
+                >
+                  <PlusIcon class="h-4 w-4" />
+                  {{ importLoading ? 'Adding...' : 'Add Feed' }}
+                </button>
+              </form>
+
+              <!-- Import OPML -->
+              <div class="border-t border-border pt-4 space-y-3">
+                <p class="text-xs font-medium text-text-secondary">Or import from OPML file</p>
+                <div>
+                  <input
+                    type="file"
+                    accept=".opml,.xml"
+                    class="input text-sm"
+                    @change="onOpmlFileChange"
+                  />
+                </div>
+                <button
+                  class="btn-primary text-sm py-2 px-3 w-full flex items-center justify-center gap-1.5"
+                  :disabled="opmlLoading || !opmlFile"
+                  @click="handleAdminImportOPML"
+                >
+                  <ArrowUpTrayIcon class="h-4 w-4" />
+                  {{ opmlLoading ? 'Importing...' : 'Import OPML' }}
+                </button>
               </div>
             </DialogPanel>
           </TransitionChild>

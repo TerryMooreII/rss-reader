@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
 import { CheckIcon, Bars3BottomLeftIcon, Squares2X2Icon, Bars3Icon, NewspaperIcon } from '@heroicons/vue/24/outline'
@@ -9,6 +10,15 @@ const props = defineProps<{
 
 const entryStore = useEntryStore()
 const ui = useUIStore()
+
+const markReadLabel = computed(() => {
+  switch (entryStore.filter.type) {
+    case 'feed': return 'Mark Feed Read'
+    case 'group': return 'Mark Group Read'
+    case 'category': return 'Mark Category Read'
+    default: return 'Mark All Read'
+  }
+})
 
 function toggleUnreadFilter() {
   const newFilter = { ...entryStore.filter, unreadOnly: !entryStore.filter.unreadOnly }
@@ -67,22 +77,24 @@ function cycleDisplayMode() {
 
       <!-- Mark all read -->
       <button
-        class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
-        aria-label="Mark all as read"
+        class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-text-muted hover:bg-bg-hover hover:text-text-primary"
+        :aria-label="markReadLabel"
         @click="entryStore.markAllRead()"
       >
-        <CheckIcon class="h-5 w-5" />
+        <CheckIcon class="h-4 w-4" />
+        <span>{{ markReadLabel }}</span>
       </button>
 
       <!-- Display mode toggle -->
       <button
-        class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
+        class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-text-muted hover:bg-bg-hover hover:text-text-primary"
         :aria-label="`Display mode: ${ui.displayMode}. Click to change.`"
         @click="cycleDisplayMode"
       >
-        <Bars3BottomLeftIcon v-if="ui.displayMode === 'comfortable'" class="h-5 w-5" />
-        <Squares2X2Icon v-else-if="ui.displayMode === 'compact'" class="h-5 w-5" />
-        <NewspaperIcon v-else class="h-5 w-5" />
+        <Bars3BottomLeftIcon v-if="ui.displayMode === 'comfortable'" class="h-4 w-4" />
+        <Squares2X2Icon v-else-if="ui.displayMode === 'compact'" class="h-4 w-4" />
+        <NewspaperIcon v-else class="h-4 w-4" />
+        <span class="capitalize">{{ ui.displayMode }}</span>
       </button>
     </div>
   </div>

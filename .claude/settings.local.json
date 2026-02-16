@@ -24,7 +24,14 @@
       "Bash(xargs:*)",
       "WebFetch(domain:supabase.com)",
       "Bash(cat:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git -C /Users/terrymooreii/code/rss-reader log --all --oneline)",
+      "Bash(git -C /Users/terrymooreii/code/rss-reader ls-files:*)",
+      "Bash(git -C /Users/terrymooreii/code/rss-reader log --all --pretty=format:\"%h %s\")",
+      "Bash(git -C /Users/terrymooreii/code/rss-reader show cec205d --stat)",
+      "Bash(grep:*)",
+      "Bash(npm audit:*)",
+      "Bash(git rm:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

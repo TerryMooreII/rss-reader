@@ -2,7 +2,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import type { Entry } from '@/types/models'
 import { useEntryStore } from '@/stores/entries'
-import DOMPurify from 'dompurify'
+import { sanitizeHtml } from '@/utils/sanitize'
 import { RssIcon } from '@heroicons/vue/24/outline'
 import {
   StarIcon as StarOutline,
@@ -82,10 +82,7 @@ const sanitizedContent = computed(() => {
   if (media.value?.type === 'youtube') {
     html = html.replace(/<iframe[^>]*youtube(?:-nocookie)?\.com\/embed\/[^>]*>[\s\S]*?<\/iframe>/gi, '')
   }
-  return DOMPurify.sanitize(html, {
-    ADD_TAGS: ['iframe'],
-    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'srcset', 'sizes', 'loading'],
-  })
+  return sanitizeHtml(html)
 })
 
 // Auto-mark-read on expand
