@@ -20,27 +20,30 @@ function isActive(name: string) {
 </script>
 
 <template>
-  <nav class="fixed bottom-0 left-0 right-0 z-20 border-t bg-bg-primary safe-bottom">
+  <nav aria-label="Bottom navigation" class="fixed bottom-0 left-0 right-0 z-20 border-t bg-bg-primary safe-bottom">
     <div class="flex items-center justify-around py-2">
       <button
         class="flex flex-col items-center gap-0.5 px-3 py-1"
         :class="ui.sidebarOpen ? 'text-accent' : 'text-text-muted'"
+        aria-label="Toggle menu"
         @click="ui.toggleSidebar()"
       >
         <Bars3Icon class="h-5 w-5" />
-        <span class="text-[10px]">Menu</span>
+        <span class="text-[10px]" aria-hidden="true">Menu</span>
       </button>
 
       <RouterLink
         to="/app/all"
         class="flex flex-col items-center gap-0.5 px-3 py-1 relative"
         :class="isActive('all-entries') ? 'text-accent' : 'text-text-muted'"
+        :aria-current="isActive('all-entries') ? 'page' : undefined"
       >
         <InboxIcon class="h-5 w-5" />
         <span class="text-[10px]">All</span>
         <span
           v-if="feedStore.totalUnread > 0"
           class="absolute -top-1 right-0 h-4 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white"
+          :aria-label="`${feedStore.totalUnread} unread`"
         >
           {{ feedStore.totalUnread > 99 ? '99+' : feedStore.totalUnread }}
         </span>
@@ -50,6 +53,7 @@ function isActive(name: string) {
         to="/app/starred"
         class="flex flex-col items-center gap-0.5 px-3 py-1"
         :class="isActive('starred-entries') ? 'text-accent' : 'text-text-muted'"
+        :aria-current="isActive('starred-entries') ? 'page' : undefined"
       >
         <StarIcon class="h-5 w-5" />
         <span class="text-[10px]">Starred</span>
@@ -59,6 +63,7 @@ function isActive(name: string) {
         to="/app/discover"
         class="flex flex-col items-center gap-0.5 px-3 py-1"
         :class="isActive('discover') ? 'text-accent' : 'text-text-muted'"
+        :aria-current="isActive('discover') ? 'page' : undefined"
       >
         <MagnifyingGlassIcon class="h-5 w-5" />
         <span class="text-[10px]">Discover</span>
@@ -68,6 +73,7 @@ function isActive(name: string) {
         to="/app/settings"
         class="flex flex-col items-center gap-0.5 px-3 py-1"
         :class="isActive('settings') ? 'text-accent' : 'text-text-muted'"
+        :aria-current="isActive('settings') ? 'page' : undefined"
       >
         <Cog6ToothIcon class="h-5 w-5" />
         <span class="text-[10px]">Settings</span>

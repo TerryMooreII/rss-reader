@@ -144,7 +144,13 @@ watch(() => entryStore.filter, () => {
     </div>
 
     <!-- Entry list -->
-    <div v-else :class="isFeedMode ? 'mx-auto max-w-2xl' : ''">
+    <div
+      v-else
+      role="feed"
+      :aria-label="`Article entries, ${entryStore.entries.length} items`"
+      :aria-busy="entryStore.loadingMore"
+      :class="isFeedMode ? 'mx-auto max-w-2xl' : ''"
+    >
       <!-- Feed mode -->
       <template v-if="isFeedMode">
         <EntryListItemFeed
@@ -153,6 +159,7 @@ watch(() => entryStore.filter, () => {
           :entry="entry"
           :expanded="entry.id === expandedEntryId"
           :data-entry-id="entry.id"
+          tabindex="-1"
           @click="handleEntryClick(entry.id)"
         />
       </template>
@@ -166,6 +173,7 @@ watch(() => entryStore.filter, () => {
           :entry="entry"
           :selected="entry.id === entryStore.selectedEntryId"
           :data-entry-id="entry.id"
+          tabindex="-1"
           @click="handleEntryClick(entry.id)"
         />
       </template>
@@ -175,8 +183,14 @@ watch(() => entryStore.filter, () => {
     <div v-if="!isPaginated" ref="sentinel" class="h-px" />
 
     <!-- Loading more indicator (infinite scroll) -->
-    <div v-if="!isPaginated && entryStore.loadingMore" class="flex justify-center py-4">
+    <div
+      v-if="!isPaginated && entryStore.loadingMore"
+      class="flex justify-center py-4"
+      role="status"
+      aria-live="polite"
+    >
       <div class="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      <span class="sr-only">Loading more entries</span>
     </div>
 
     <!-- Pagination controls -->

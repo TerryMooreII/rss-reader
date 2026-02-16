@@ -37,36 +37,36 @@ const excerpt = computed(() => {
 
 <template>
   <article
-    class="border-b px-4 py-3 cursor-pointer transition-colors"
+    class="border-b px-4 py-3 cursor-pointer transition-colors outline-none"
     :class="[
       selected ? 'bg-bg-active' : 'hover:bg-bg-hover',
-      isRead ? 'opacity-80' : '',
     ]"
+    :aria-label="`${entry.title || 'Untitled'} from ${entry.feed_title || 'unknown feed'}${isRead ? '' : ' (unread)'}${entry.starred_at ? ' (starred)' : ''}`"
     @click="$emit('click')"
   >
     <div class="flex items-center gap-2 mb-1">
       <img
         v-if="entry.feed_favicon_url && !faviconError"
         :src="entry.feed_favicon_url"
-        :alt="entry.feed_title || ''"
+        alt=""
         class="h-4 w-4 shrink-0 rounded"
         loading="lazy"
         @error="faviconError = true"
       />
-      <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" />
+      <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
       <span class="text-xs text-text-muted truncate">{{ entry.feed_title }}</span>
-      <span v-if="entry.starred_at" class="text-star text-xs">&#9733;</span>
+      <span v-if="entry.starred_at" class="text-star text-xs" aria-hidden="true">&#9733;</span>
       <span class="ml-auto text-xs text-text-muted whitespace-nowrap">{{ timeAgo }}</span>
     </div>
 
     <h3
       class="text-sm leading-snug mb-1"
-      :class="isRead ? 'text-text-secondary' : 'text-text-primary font-semibold'"
+      :class="isRead ? 'text-text-muted' : 'text-text-primary font-semibold'"
     >
       {{ entry.title || 'Untitled' }}
     </h3>
 
-    <p v-if="excerpt" class="text-xs text-text-muted leading-relaxed line-clamp-2">
+    <p v-if="excerpt" class="text-xs text-text-secondary leading-relaxed line-clamp-2">
       {{ excerpt }}
     </p>
   </article>

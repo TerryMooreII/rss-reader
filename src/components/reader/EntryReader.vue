@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
 import DOMPurify from 'dompurify'
@@ -18,9 +18,21 @@ const entryStore = useEntryStore()
 const ui = useUIStore()
 
 const entry = computed(() => entryStore.selectedEntry)
+const readerEl = ref<HTMLElement | null>(null)
 
 const faviconError = ref(false)
 watch(() => entry.value?.id, () => { faviconError.value = false })
+
+// Focus the reader panel when a new entry is selected
+watch(
+  () => entry.value?.id,
+  async (newId) => {
+    if (newId && readerEl.value) {
+      await nextTick()
+      readerEl.value.focus({ preventScroll: true })
+    }
+  },
+)
 
 function decodeXmlEntities(text: string): string {
   return text
@@ -83,26 +95,38 @@ function shareLink() {
 </script>
 
 <template>
-  <div v-if="entry" class="flex h-full flex-col overflow-hidden bg-bg-primary">
+  <div
+    v-if="entry"
+    ref="readerEl"
+    class="flex h-full flex-col overflow-hidden bg-bg-primary"
+    role="region"
+    aria-label="Article reader"
+    tabindex="-1"
+  >
     <!-- Toolbar -->
     <div class="flex items-center justify-between border-b px-4 py-2 shrink-0">
       <div class="flex items-center gap-2">
-        <button class="btn-ghost text-xs gap-1" @click="openExternal">
+        <button class="btn-ghost text-xs gap-1" aria-label="Open original article" @click="openExternal">
           <ArrowTopRightOnSquareIcon class="h-4 w-4" />
           Open
         </button>
-        <button class="btn-ghost text-xs gap-1" @click="toggleStar">
+        <button
+          class="btn-ghost text-xs gap-1"
+          :aria-label="isStarred ? 'Unstar this entry' : 'Star this entry'"
+          :aria-pressed="isStarred"
+          @click="toggleStar"
+        >
           <StarSolid v-if="isStarred" class="h-4 w-4 text-star" />
           <StarOutline v-else class="h-4 w-4" />
-          Star
+          {{ isStarred ? 'Starred' : 'Star' }}
         </button>
-        <button class="btn-ghost text-xs gap-1" @click="shareLink">
+        <button class="btn-ghost text-xs gap-1" aria-label="Copy link to clipboard" @click="shareLink">
           <ShareIcon class="h-4 w-4" />
           Share
         </button>
       </div>
       <div class="flex items-center gap-2">
-        <button class="btn-ghost text-xs gap-1" @click="entryStore.selectEntry(null)">
+        <button class="btn-ghost text-xs gap-1" aria-label="Close reader" @click="entryStore.selectEntry(null)">
           <XMarkIcon class="h-4 w-4" />
           Close
         </button>

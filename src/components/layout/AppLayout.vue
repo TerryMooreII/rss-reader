@@ -37,9 +37,16 @@ watch(
   },
 )
 
+function focusSelectedEntry() {
+  const id = entryStore.selectedEntryId
+  if (!id) return
+  const el = document.querySelector(`[data-entry-id="${id}"]`) as HTMLElement | null
+  el?.focus({ preventScroll: true })
+}
+
 useKeyboardShortcuts([
-  { key: 'j', handler: () => entryStore.selectNext(), description: 'Next entry' },
-  { key: 'k', handler: () => entryStore.selectPrevious(), description: 'Previous entry' },
+  { key: 'j', handler: () => { entryStore.selectNext(); requestAnimationFrame(focusSelectedEntry) }, description: 'Next entry' },
+  { key: 'k', handler: () => { entryStore.selectPrevious(); requestAnimationFrame(focusSelectedEntry) }, description: 'Previous entry' },
   {
     key: 's',
     handler: () => {
@@ -178,11 +185,13 @@ async function refetchAllData() {
 </script>
 
 <template>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <div class="flex h-screen overflow-hidden bg-bg-primary text-text-primary">
     <!-- Sidebar overlay on mobile -->
     <div
       v-if="ui.sidebarOpen && isMobile"
       class="fixed inset-0 z-30 bg-black/50 md:hidden"
+      aria-hidden="true"
       @click="ui.toggleSidebar()"
     />
 
@@ -196,9 +205,9 @@ async function refetchAllData() {
     </Transition>
 
     <!-- Main content -->
-    <div class="flex flex-1 flex-col min-w-0">
+    <main id="main-content" class="flex flex-1 flex-col min-w-0">
       <RouterView />
-    </div>
+    </main>
 
     <!-- Mobile bottom nav -->
     <MobileNav class="md:hidden" />

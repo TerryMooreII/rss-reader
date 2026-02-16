@@ -28,6 +28,7 @@ function cycleDisplayMode() {
     <div class="flex items-center gap-2">
       <button
         class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary md:hidden"
+        aria-label="Toggle sidebar"
         @click="ui.toggleSidebar()"
       >
         <Bars3Icon class="h-5 w-5" />
@@ -37,7 +38,7 @@ function cycleDisplayMode() {
 
     <div class="flex items-center gap-2">
       <!-- Unread / All toggle -->
-      <div class="flex rounded-lg bg-bg-secondary p-0.5 text-xs">
+      <div class="flex rounded-lg bg-bg-secondary p-0.5 text-xs" role="group" aria-label="Filter entries">
         <button
           class="rounded-md px-2.5 py-1 font-medium transition-colors"
           :class="
@@ -45,6 +46,7 @@ function cycleDisplayMode() {
               ? 'bg-bg-primary text-text-primary shadow-sm'
               : 'text-text-secondary'
           "
+          :aria-pressed="entryStore.filter.unreadOnly"
           @click="!entryStore.filter.unreadOnly && toggleUnreadFilter()"
         >
           Unread
@@ -56,6 +58,7 @@ function cycleDisplayMode() {
               ? 'bg-bg-primary text-text-primary shadow-sm'
               : 'text-text-secondary'
           "
+          :aria-pressed="!entryStore.filter.unreadOnly"
           @click="entryStore.filter.unreadOnly && toggleUnreadFilter()"
         >
           All
@@ -65,21 +68,21 @@ function cycleDisplayMode() {
       <!-- Mark all read -->
       <button
         class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
-        title="Mark all as read"
+        aria-label="Mark all as read"
         @click="entryStore.markAllRead()"
       >
-        <CheckIcon class="h-4 w-4" />
+        <CheckIcon class="h-5 w-5" />
       </button>
 
       <!-- Display mode toggle -->
       <button
         class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
-        :title="`View: ${ui.displayMode}`"
+        :aria-label="`Display mode: ${ui.displayMode}. Click to change.`"
         @click="cycleDisplayMode"
       >
-        <Bars3BottomLeftIcon v-if="ui.displayMode === 'comfortable'" class="h-4 w-4" />
-        <Squares2X2Icon v-else-if="ui.displayMode === 'compact'" class="h-4 w-4" />
-        <NewspaperIcon v-else class="h-4 w-4" />
+        <Bars3BottomLeftIcon v-if="ui.displayMode === 'comfortable'" class="h-5 w-5" />
+        <Squares2X2Icon v-else-if="ui.displayMode === 'compact'" class="h-5 w-5" />
+        <NewspaperIcon v-else class="h-5 w-5" />
       </button>
     </div>
   </div>

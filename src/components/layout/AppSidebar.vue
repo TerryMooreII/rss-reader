@@ -112,7 +112,7 @@ function categoryUnread(category: string): number {
 </script>
 
 <template>
-  <aside class="flex h-full w-64 flex-col border-r bg-bg-sidebar overflow-hidden">
+  <aside aria-label="Sidebar" class="flex h-full w-64 flex-col border-r bg-bg-sidebar overflow-hidden">
     <!-- Header -->
     <div class="flex h-14 items-center justify-between px-4 border-b">
       <RouterLink to="/app/all" class="flex items-center gap-2">
@@ -121,7 +121,7 @@ function categoryUnread(category: string): number {
       </RouterLink>
       <button
         class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
-        title="Add feed"
+        aria-label="Add feed"
         @click="showAddFeed = true"
       >
         <PlusIcon class="h-5 w-5" />
@@ -137,11 +137,12 @@ function categoryUnread(category: string): number {
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+    <nav aria-label="Main navigation" class="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
       <!-- Main nav -->
       <RouterLink
         to="/app/all"
         :class="isActive('all-entries') ? 'sidebar-item-active' : 'sidebar-item'"
+        :aria-current="isActive('all-entries') ? 'page' : undefined"
       >
         <InboxIcon class="h-5 w-5 shrink-0" />
         <span class="flex-1">All</span>
@@ -156,6 +157,7 @@ function categoryUnread(category: string): number {
       <RouterLink
         to="/app/starred"
         :class="isActive('starred-entries') ? 'sidebar-item-active' : 'sidebar-item'"
+        :aria-current="isActive('starred-entries') ? 'page' : undefined"
       >
         <StarIcon class="h-5 w-5 shrink-0" />
         <span class="flex-1">Starred</span>
@@ -164,6 +166,7 @@ function categoryUnread(category: string): number {
       <RouterLink
         to="/app/discover"
         :class="isActive('discover') ? 'sidebar-item-active' : 'sidebar-item'"
+        :aria-current="isActive('discover') ? 'page' : undefined"
       >
         <MagnifyingGlassIcon class="h-5 w-5 shrink-0" />
         <span class="flex-1">Discover</span>
@@ -172,6 +175,7 @@ function categoryUnread(category: string): number {
       <RouterLink
         to="/app/settings"
         :class="isActive('settings') ? 'sidebar-item-active' : 'sidebar-item'"
+        :aria-current="isActive('settings') ? 'page' : undefined"
       >
         <Cog6ToothIcon class="h-5 w-5 shrink-0" />
         <span class="flex-1">Settings</span>
@@ -181,6 +185,7 @@ function categoryUnread(category: string): number {
         v-if="authStore.isAdmin"
         to="/app/admin"
         :class="isActive('admin') ? 'sidebar-item-active' : 'sidebar-item'"
+        :aria-current="isActive('admin') ? 'page' : undefined"
       >
         <ShieldCheckIcon class="h-5 w-5 shrink-0" />
         <span class="flex-1">Admin</span>
@@ -195,26 +200,30 @@ function categoryUnread(category: string): number {
           <button
             class="sidebar-item w-full"
             :class="{ 'sidebar-item-active': isCategoryActive(cat) }"
+            :aria-expanded="feedStore.expandedCategories.has(cat)"
+            :aria-current="isCategoryActive(cat) ? 'page' : undefined"
             @click="onCategoryClick(cat)"
           >
             <ChevronRightIcon
               class="h-4 w-4 shrink-0 transition-transform"
               :class="{ 'rotate-90': feedStore.expandedCategories.has(cat) }"
+              aria-hidden="true"
             />
             <component
               :is="categoryMeta.get(cat)?.icon"
               class="h-5 w-5 shrink-0"
+              aria-hidden="true"
             />
             <span class="flex-1 truncate text-left">{{ categoryMeta.get(cat)?.label }}</span>
             <span
-              v-if="categoryUnread(cat) > 0"
-              class="text-xs text-text-muted"
+              class="text-xs"
+              :class="categoryUnread(cat) > 0 ? 'text-text-muted' : 'text-text-muted/40'"
             >
               {{ categoryUnread(cat) }}
             </span>
           </button>
           <!-- Category feeds (collapsible) -->
-          <div v-show="feedStore.expandedCategories.has(cat)" class="pl-4">
+          <div v-show="feedStore.expandedCategories.has(cat)" role="group" :aria-label="categoryMeta.get(cat)?.label + ' feeds'" class="pl-4">
             <SidebarFeedItem
               v-for="feed in feedStore.feedsByCategory.get(cat) || []"
               :key="feed.id"

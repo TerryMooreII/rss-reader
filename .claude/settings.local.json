@@ -23,7 +23,8 @@
       "Bash(npx vite build:*)",
       "Bash(xargs:*)",
       "WebFetch(domain:supabase.com)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(find:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -39,6 +39,30 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Skip to content link — visually hidden until focused */
+  .skip-link {
+    position: absolute;
+    top: -100%;
+    left: 1rem;
+    z-index: 100;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    background-color: rgb(var(--c-accent));
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    &:focus {
+      top: 0.5rem;
+    }
+  }
+
+  /* Focus-visible ring for all interactive elements */
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-accent));
+    outline-offset: 2px;
+  }
+
   /* Custom scrollbar styling */
   ::-webkit-scrollbar {
     width: 6px;
@@ -71,9 +95,9 @@
   line-height: 1.25rem;
   font-weight: 500;
   transition: color 150ms, background-color 150ms;
-  &:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgb(var(--c-accent) / 0.5);
+  &:focus-visible {
+    outline: 2px solid rgb(var(--c-accent));
+    outline-offset: 2px;
   }
   &:disabled {
     opacity: 0.5;
@@ -153,6 +177,10 @@
   &:hover {
     background-color: rgb(var(--c-accent) / 0.12);
     color: rgb(var(--c-accent));
+  }
+  &:focus-visible {
+    outline: 2px solid rgb(var(--c-accent));
+    outline-offset: -2px;
   }
 }
 

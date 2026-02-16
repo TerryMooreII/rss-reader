@@ -29,6 +29,8 @@ export function useEntryNavigation() {
           behavior: 'smooth',
           block: 'nearest',
         })
+        // Move DOM focus to the selected entry for screen reader users
+        entryElement.focus({ preventScroll: true })
       }
     },
   )

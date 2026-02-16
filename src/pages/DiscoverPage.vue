@@ -27,6 +27,8 @@ const selectedCategory = ref<string | null>(null)
 const feeds = ref<(Feed & { subscriber_count?: number })[]>([])
 const loading = ref(false)
 
+const actionLoading = ref<string | null>(null)
+
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 async function loadFeeds() {
@@ -64,11 +66,26 @@ function isSubscribed(feedId: string) {
 }
 
 async function subscribe(feedId: string) {
+  actionLoading.value = feedId
   try {
     await feedStore.subscribeFeed(feedId)
     notifications.success('Subscribed!')
   } catch (e: any) {
     notifications.error(e.message || 'Failed to subscribe')
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+async function unsubscribe(feedId: string) {
+  actionLoading.value = feedId
+  try {
+    await feedStore.unsubscribeFeed(feedId)
+    notifications.success('Unsubscribed')
+  } catch (e: any) {
+    notifications.error(e.message || 'Failed to unsubscribe')
+  } finally {
+    actionLoading.value = null
   }
 }
 
@@ -180,15 +197,28 @@ onMounted(loadFeeds)
 
           <button
             v-if="isSubscribed(feed.id)"
-            class="btn-ghost text-xs text-success shrink-0"
-            disabled
+            class="btn-ghost text-xs text-success shrink-0 hover:text-danger group/sub"
+            :disabled="actionLoading === feed.id"
+            @click="unsubscribe(feed.id)"
           >
-            <CheckIcon class="h-4 w-4" />
-            Subscribed
+            <span v-if="actionLoading === feed.id" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <template v-else>
+              <CheckIcon class="h-4 w-4 group-hover/sub:hidden" />
+              <span class="group-hover/sub:hidden">Subscribed</span>
+              <span class="hidden group-hover/sub:inline text-danger">Unsubscribe</span>
+            </template>
           </button>
-          <button v-else class="btn-primary text-xs shrink-0" @click="subscribe(feed.id)">
-            <PlusIcon class="h-4 w-4" />
-            Subscribe
+          <button
+            v-else
+            class="btn-primary text-xs shrink-0"
+            :disabled="actionLoading === feed.id"
+            @click="subscribe(feed.id)"
+          >
+            <span v-if="actionLoading === feed.id" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            <template v-else>
+              <PlusIcon class="h-4 w-4" />
+              Subscribe
+            </template>
           </button>
         </div>
       </div>

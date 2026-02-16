@@ -106,7 +106,8 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
         <button
           class="absolute right-0 flex items-center justify-center rounded p-0.5 text-text-muted hover:text-text-primary transition-opacity duration-150"
           :class="menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-          title="Feed options"
+          aria-label="Feed options"
+          :aria-expanded="menuOpen"
           @click="toggleMenu"
         >
           <EllipsisVerticalIcon class="h-4 w-4" />
@@ -126,6 +127,7 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
       <div
         v-if="menuOpen"
         ref="menuEl"
+        role="menu"
         class="absolute right-2 top-full z-50 mt-1 w-48 rounded-lg border border-border bg-bg-primary py-1 shadow-lg"
       >
         <button

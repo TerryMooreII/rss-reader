@@ -128,11 +128,12 @@ function collapse(e: Event) {
 
 <template>
   <article
-    class="border-b border-border cursor-pointer transition-colors"
+    class="group/entry border-b border-border cursor-pointer transition-colors outline-none"
     :class="[
       expanded ? 'bg-bg-secondary/50' : 'hover:bg-bg-hover',
-      isRead && !expanded ? 'opacity-80' : '',
     ]"
+    :aria-label="`${entry.title || 'Untitled'} from ${entry.feed_title || 'unknown feed'}${isRead ? '' : ' (unread)'}${isStarred ? ' (starred)' : ''}`"
+    :aria-expanded="expanded"
     @click="$emit('click')"
   >
     <div class="px-4 py-4">
@@ -155,7 +156,7 @@ function collapse(e: Event) {
       <!-- Title -->
       <h3
         class="text-base leading-snug mb-2"
-        :class="isRead && !expanded ? 'text-text-secondary' : 'text-text-primary font-semibold'"
+        :class="isRead && !expanded ? 'text-text-muted' : 'text-text-primary font-semibold'"
       >
         {{ entry.title || 'Untitled' }}
       </h3>
@@ -218,31 +219,35 @@ function collapse(e: Event) {
       </div>
 
       <!-- Action bar -->
-      <div class="flex items-center gap-1 mt-3 -ml-1.5">
+      <div
+        class="flex items-center gap-1 mt-3 -ml-1.5 transition-opacity"
+        :class="expanded ? 'opacity-100' : 'opacity-0 group-hover/entry:opacity-100 focus-within:opacity-100'"
+      >
         <button
-          class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors"
+          class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors"
           :class="isStarred ? 'text-star' : 'text-text-muted hover:text-star hover:bg-bg-hover'"
-          title="Star"
+          :aria-label="isStarred ? 'Unstar this entry' : 'Star this entry'"
+          :aria-pressed="isStarred"
           @click="toggleStar"
         >
           <StarSolid v-if="isStarred" class="h-4 w-4" />
           <StarOutline v-else class="h-4 w-4" />
-          <span>Star</span>
+          <span>{{ isStarred ? 'Starred' : 'Star' }}</span>
         </button>
 
         <button
-          class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
-          :title="isRead ? 'Mark unread' : 'Mark read'"
+          class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+          :aria-label="isRead ? 'Mark as unread' : 'Mark as read'"
           @click="toggleRead"
         >
           <EyeSlashIcon v-if="isRead" class="h-4 w-4" />
           <EyeIcon v-else class="h-4 w-4" />
-          <span>{{ isRead ? 'Unread' : 'Read' }}</span>
+          <span>{{ isRead ? 'Mark Unread' : 'Mark Read' }}</span>
         </button>
 
         <button
-          class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
-          title="Open original"
+          class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+          aria-label="Open original article"
           @click="openExternal"
         >
           <ArrowTopRightOnSquareIcon class="h-4 w-4" />
@@ -250,8 +255,8 @@ function collapse(e: Event) {
         </button>
 
         <button
-          class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
-          title="Copy link"
+          class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+          aria-label="Copy link to clipboard"
           @click="copyLink"
         >
           <LinkIcon class="h-4 w-4" />
@@ -261,8 +266,8 @@ function collapse(e: Event) {
         <!-- Collapse button (when expanded) -->
         <button
           v-if="expanded"
-          class="ml-auto flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
-          title="Collapse"
+          class="ml-auto flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+          aria-label="Collapse entry"
           @click="collapse"
         >
           <ChevronUpIcon class="h-4 w-4" />

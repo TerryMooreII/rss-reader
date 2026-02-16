@@ -32,34 +32,34 @@ const isRead = computed(() => !!props.entry.read_at)
 
 <template>
   <article
-    class="flex items-center gap-3 border-b px-4 py-2.5 cursor-pointer transition-colors"
+    class="flex items-center gap-3 border-b px-4 py-2.5 cursor-pointer transition-colors outline-none"
     :class="[
       selected ? 'bg-bg-active' : 'hover:bg-bg-hover',
-      isRead ? 'opacity-80' : '',
     ]"
+    :aria-label="`${entry.title || 'Untitled'}${isRead ? '' : ' (unread)'}${entry.starred_at ? ' (starred)' : ''}`"
     @click="$emit('click')"
   >
     <!-- Favicon -->
     <img
       v-if="entry.feed_favicon_url && !faviconError"
       :src="entry.feed_favicon_url"
-      :alt="entry.feed_title || ''"
+      alt=""
       class="h-4 w-4 shrink-0 rounded"
       loading="lazy"
       @error="faviconError = true"
     />
-    <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" />
+    <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
 
     <!-- Title -->
     <span
       class="flex-1 truncate text-sm"
-      :class="isRead ? 'text-text-secondary' : 'text-text-primary font-medium'"
+      :class="isRead ? 'text-text-muted' : 'text-text-primary font-semibold'"
     >
       {{ entry.title || 'Untitled' }}
     </span>
 
     <!-- Star indicator -->
-    <span v-if="entry.starred_at" class="text-star text-xs shrink-0">&#9733;</span>
+    <span v-if="entry.starred_at" class="text-star text-xs shrink-0" aria-hidden="true">&#9733;</span>
 
     <!-- Time -->
     <span class="shrink-0 text-xs text-text-muted whitespace-nowrap">{{ timeAgo }}</span>
