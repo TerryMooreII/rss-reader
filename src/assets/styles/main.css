@@ -81,6 +81,37 @@
   ::-webkit-scrollbar-thumb:hover {
     background: rgb(var(--c-text-muted) / 0.5);
   }
+
+}
+
+/* Force Tailwind Typography prose to use theme colors */
+.prose {
+  color: rgb(var(--c-text-primary));
+}
+
+.prose :where(h1, h2, h3, h4, h5, h6, strong, b, th) {
+  color: rgb(var(--c-text-primary));
+}
+
+.prose :where(p, li, td, dd, dt, figcaption, span) {
+  color: rgb(var(--c-text-primary));
+}
+
+.prose :where(a) {
+  color: rgb(var(--c-accent));
+}
+
+.prose :where(blockquote) {
+  color: rgb(var(--c-text-secondary));
+  border-color: rgb(var(--c-accent));
+}
+
+.prose :where(code) {
+  color: rgb(var(--c-accent));
+}
+
+.prose :where(hr) {
+  border-color: rgb(var(--c-border));
 }
 
 /* Component utility classes */

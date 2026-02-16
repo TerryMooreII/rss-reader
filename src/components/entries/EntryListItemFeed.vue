@@ -194,12 +194,8 @@ function collapse(e: Event) {
         <!-- Sanitized HTML content -->
         <div
           class="prose prose-sm max-w-none
-            prose-headings:text-text-primary
-            prose-p:text-text-primary
-            prose-a:text-accent prose-a:no-underline hover:prose-a:underline
-            prose-strong:text-text-primary
-            prose-code:text-accent prose-code:bg-bg-secondary prose-code:rounded prose-code:px-1
-            prose-blockquote:border-accent prose-blockquote:text-text-secondary
+            prose-a:no-underline hover:prose-a:underline
+            prose-code:bg-bg-secondary prose-code:rounded prose-code:px-1
             prose-img:rounded-lg"
           v-html="sanitizedContent"
         />
