@@ -8,8 +8,10 @@ import {
   EllipsisVerticalIcon,
   PencilIcon,
   TrashIcon,
+  CheckCircleIcon,
 } from '@heroicons/vue/24/outline'
 import { useGroupStore } from '@/stores/groups'
+import { useEntryStore } from '@/stores/entries'
 import { useNotificationStore } from '@/stores/notifications'
 
 const props = defineProps<{
@@ -20,6 +22,7 @@ const props = defineProps<{
 const route = useRoute()
 const router = useRouter()
 const groupStore = useGroupStore()
+const entryStore = useEntryStore()
 const notifications = useNotificationStore()
 
 const isActive = computed(
@@ -79,6 +82,20 @@ async function confirmRename(e: Event) {
     notifications.success('Group renamed')
   } catch {
     notifications.error('Failed to rename group')
+  } finally {
+    closeMenu()
+  }
+}
+
+async function markAsRead(e: Event) {
+  e.preventDefault()
+  e.stopPropagation()
+
+  try {
+    await entryStore.markGroupAsRead(props.group.id)
+    notifications.success('Marked as read')
+  } catch {
+    notifications.error('Failed to mark as read')
   } finally {
     closeMenu()
   }
@@ -282,6 +299,13 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
 
         <!-- Default menu items -->
         <template v-else>
+          <button
+            class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
+            @click="markAsRead"
+          >
+            <CheckCircleIcon class="h-4 w-4" />
+            Mark as Read
+          </button>
           <button
             class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
             @click="startRename"

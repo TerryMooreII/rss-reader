@@ -43,6 +43,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import SidebarFeedItem from '@/components/sidebar/SidebarFeedItem.vue'
 import SidebarGroupItem from '@/components/sidebar/SidebarGroupItem.vue'
+import SidebarCategoryItem from '@/components/sidebar/SidebarCategoryItem.vue'
 import AddFeedDialog from '@/components/sidebar/AddFeedDialog.vue'
 import type { Component } from 'vue'
 
@@ -331,31 +332,15 @@ function categoryUnread(category: string): number {
 
         <template v-if="categoriesSectionOpen">
           <div v-for="cat in feedStore.usedCategories" :key="cat" class="space-y-0.5">
-            <button
-              class="sidebar-item w-full"
-              :class="{ 'sidebar-item-active': isCategoryActive(cat) }"
-              :aria-expanded="feedStore.expandedCategories.has(cat)"
-              :aria-current="isCategoryActive(cat) ? 'page' : undefined"
+            <SidebarCategoryItem
+              :category="cat"
+              :label="categoryMeta.get(cat)?.label ?? cat"
+              :icon="categoryMeta.get(cat)?.icon ?? TagIcon"
+              :unread-count="categoryUnread(cat)"
+              :is-active="isCategoryActive(cat)"
+              :is-expanded="feedStore.expandedCategories.has(cat)"
               @click="onCategoryClick(cat)"
-            >
-              <ChevronRightIcon
-                class="h-4 w-4 shrink-0 transition-transform"
-                :class="{ 'rotate-90': feedStore.expandedCategories.has(cat) }"
-                aria-hidden="true"
-              />
-              <component
-                :is="categoryMeta.get(cat)?.icon"
-                class="h-5 w-5 shrink-0"
-                aria-hidden="true"
-              />
-              <span class="flex-1 truncate text-left">{{ categoryMeta.get(cat)?.label }}</span>
-              <span
-                class="text-xs"
-                :class="categoryUnread(cat) > 0 ? 'text-text-muted' : 'text-text-muted/40'"
-              >
-                {{ categoryUnread(cat) }}
-              </span>
-            </button>
+            />
             <!-- Category feeds (collapsible) -->
             <div v-show="feedStore.expandedCategories.has(cat)" role="group" :aria-label="categoryMeta.get(cat)?.label + ' feeds'" class="pl-4">
               <SidebarFeedItem

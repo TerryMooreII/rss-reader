@@ -86,6 +86,7 @@ watch(() => ui.displayMode, () => {
 })
 watch(() => entryStore.filter, () => {
   expandedEntryId.value = null
+  scrollContainer.value?.scrollTo({ top: 0 })
 })
 </script>
 

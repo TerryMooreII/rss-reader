@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
 import type { Entry, EntryFilter } from '@/types/models'
 import { useFeedStore } from './feeds'
+import { useGroupStore } from './groups'
 import { useAuthStore } from './auth'
 import { useUIStore } from './ui'
 
@@ -394,6 +395,90 @@ export const useEntryStore = defineStore('entries', () => {
     }
   }
 
+  async function markFeedAsRead(feedId: string): Promise<void> {
+    try {
+      const userId = _getUserId()
+      const { error: rpcError } = await supabase.rpc('mark_feed_as_read', {
+        p_user_id: userId,
+        p_feed_id: feedId,
+      })
+      if (rpcError) throw rpcError
+
+      const feedStore = useFeedStore()
+      feedStore.updateUnreadCount(feedId, -(feedStore.feedById(feedId)?.unread_count ?? 0))
+
+      // Update visible entries if viewing this feed
+      if (filter.value.type === 'feed' && filter.value.feedId === feedId) {
+        const now = new Date().toISOString()
+        for (const entry of entries.value) {
+          if (!entry.read_at) entry.read_at = now
+        }
+      }
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to mark feed as read'
+    }
+  }
+
+  async function markGroupAsRead(groupId: string): Promise<void> {
+    try {
+      const userId = _getUserId()
+      const { error: rpcError } = await supabase.rpc('mark_group_as_read', {
+        p_user_id: userId,
+        p_group_id: groupId,
+      })
+      if (rpcError) throw rpcError
+
+      const feedStore = useFeedStore()
+      const groupStore = useGroupStore()
+      const feedIds = groupStore.feedsByGroup(groupId)
+      for (const fid of feedIds) {
+        feedStore.updateUnreadCount(fid, -(feedStore.feedById(fid)?.unread_count ?? 0))
+      }
+
+      // Update group unread count locally
+      const group = groupStore.groups.find((g) => g.id === groupId)
+      if (group) group.unread_count = 0
+
+      // Update visible entries if viewing this group
+      if (filter.value.type === 'group' && filter.value.groupId === groupId) {
+        const now = new Date().toISOString()
+        for (const entry of entries.value) {
+          if (!entry.read_at) entry.read_at = now
+        }
+      }
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to mark group as read'
+    }
+  }
+
+  async function markCategoryAsRead(category: string): Promise<void> {
+    try {
+      const userId = _getUserId()
+      const { error: rpcError } = await supabase.rpc('mark_category_as_read', {
+        p_user_id: userId,
+        p_category: category,
+      })
+      if (rpcError) throw rpcError
+
+      const feedStore = useFeedStore()
+      const feedsInCat = feedStore.feedsByCategory.get(category) ?? []
+      for (const feed of feedsInCat) {
+        feedStore.updateUnreadCount(feed.id, -feed.unread_count)
+      }
+      feedStore.fetchCategoryUnreadCounts()
+
+      // Update visible entries if viewing this category
+      if (filter.value.type === 'category' && filter.value.category === category) {
+        const now = new Date().toISOString()
+        for (const entry of entries.value) {
+          if (!entry.read_at) entry.read_at = now
+        }
+      }
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to mark category as read'
+    }
+  }
+
   function selectEntry(id: string | null): void {
     selectedEntryId.value = id
 
@@ -482,6 +567,9 @@ export const useEntryStore = defineStore('entries', () => {
     toggleRead,
     toggleStar,
     markAllRead,
+    markFeedAsRead,
+    markGroupAsRead,
+    markCategoryAsRead,
     silentRefresh,
     selectEntry,
     selectNext,

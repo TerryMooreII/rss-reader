@@ -8,10 +8,12 @@ import {
   FolderPlusIcon,
   ChevronRightIcon,
   CheckIcon,
+  CheckCircleIcon,
 } from '@heroicons/vue/24/outline'
 import { computed, ref, onUnmounted } from 'vue'
 import { useFeedStore } from '@/stores/feeds'
 import { useGroupStore } from '@/stores/groups'
+import { useEntryStore } from '@/stores/entries'
 import { useNotificationStore } from '@/stores/notifications'
 
 const props = defineProps<{
@@ -22,6 +24,7 @@ const route = useRoute()
 const router = useRouter()
 const feedStore = useFeedStore()
 const groupStore = useGroupStore()
+const entryStore = useEntryStore()
 const notifications = useNotificationStore()
 
 const faviconError = ref(false)
@@ -70,6 +73,21 @@ async function confirmUnsubscribe(e: Event) {
     notifications.success(`Unsubscribed from ${feedTitle}`)
   } catch {
     notifications.error('Failed to unsubscribe')
+  } finally {
+    closeMenu()
+  }
+}
+
+async function markAsRead(e: Event) {
+  e.preventDefault()
+  e.stopPropagation()
+  if (!props.feed) return
+
+  try {
+    await entryStore.markFeedAsRead(props.feed.id)
+    notifications.success('Marked as read')
+  } catch {
+    notifications.error('Failed to mark as read')
   } finally {
     closeMenu()
   }
@@ -191,6 +209,15 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
             <FolderPlusIcon class="h-4 w-4" />
             <span class="flex-1 text-left">Add to Group</span>
             <ChevronRightIcon class="h-3 w-3" />
+          </button>
+
+          <!-- Mark as Read -->
+          <button
+            class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
+            @click="markAsRead"
+          >
+            <CheckCircleIcon class="h-4 w-4" />
+            Mark as Read
           </button>
 
           <!-- Unsubscribe -->
