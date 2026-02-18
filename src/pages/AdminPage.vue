@@ -73,7 +73,7 @@ function toggleSort(column: SortableColumn) {
 }
 
 const categoryLabel = computed(() => {
-  const map = new Map(FEED_CATEGORIES.map((c) => [c.value, c.label]))
+  const map = new Map<string, string>(FEED_CATEGORIES.map((c) => [c.value, c.label]))
   return (val: string) => map.get(val) ?? val
 })
 

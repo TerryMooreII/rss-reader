@@ -19,7 +19,7 @@ export function detectYouTubeVideo(
     const watchMatch = entryUrl.match(
       /(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([\w-]{11})/i,
     )
-    if (watchMatch) return watchMatch[1]
+    if (watchMatch) return watchMatch[1] ?? null
   }
 
   // Check content HTML for youtube.com/embed/ iframes
@@ -27,7 +27,7 @@ export function detectYouTubeVideo(
     const embedMatch = contentHtml.match(
       /youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/i,
     )
-    if (embedMatch) return embedMatch[1]
+    if (embedMatch) return embedMatch[1] ?? null
   }
 
   return null
@@ -40,13 +40,13 @@ export function detectAudioEnclosure(
 
   // Look for <audio src="...">
   const audioMatch = contentHtml.match(/<audio[^>]*src=["']([^"']+)["']/i)
-  if (audioMatch) return audioMatch[1]
+  if (audioMatch) return audioMatch[1] ?? null
 
   // Look for <source src="...mp3"> or similar audio formats
   const sourceMatch = contentHtml.match(
     /<source[^>]*src=["']([^"']+\.(?:mp3|m4a|ogg|wav|aac))["']/i,
   )
-  if (sourceMatch) return sourceMatch[1]
+  if (sourceMatch) return sourceMatch[1] ?? null
 
   return null
 }

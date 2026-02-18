@@ -118,6 +118,7 @@ async function onDrop(e: DragEvent, targetGroupId: string) {
   if (draggedIndex === -1 || targetIndex === -1) return
 
   const [removed] = groups.splice(draggedIndex, 1)
+  if (!removed) return
   groups.splice(targetIndex, 0, removed)
 
   try {

@@ -30,15 +30,16 @@ function isAllowedIframeHost(src: string): boolean {
 
 // Register a hook once to filter iframes by origin
 DOMPurify.addHook('uponSanitizeElement', (node) => {
-  if (node.tagName === 'IFRAME') {
-    const src = node.getAttribute('src') || ''
+  const el = node as Element
+  if (el.tagName === 'IFRAME') {
+    const src = el.getAttribute('src') || ''
     if (!isAllowedIframeHost(src)) {
       node.parentNode?.removeChild(node)
     }
   }
 })
 
-const SANITIZE_CONFIG: DOMPurify.Config = {
+const SANITIZE_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
   ADD_TAGS: ['iframe'],
   ADD_ATTR: [
     'allow',
@@ -53,5 +54,5 @@ const SANITIZE_CONFIG: DOMPurify.Config = {
 }
 
 export function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, SANITIZE_CONFIG)
+  return DOMPurify.sanitize(html, SANITIZE_CONFIG) as string
 }
