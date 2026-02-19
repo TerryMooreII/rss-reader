@@ -34,9 +34,9 @@ function cycleDisplayMode() {
 </script>
 
 <template>
-  <div class="shrink-0 border-b overflow-hidden">
+  <div class="shrink-0 border-b md:border-b-0 overflow-hidden">
     <!-- Single row on desktop, two rows on mobile -->
-    <div class="flex items-center justify-between px-4 h-14 md:h-14">
+    <div class="flex items-center justify-between px-4 h-14 md:h-14 md:border-b">
       <!-- Left: hamburger + title -->
       <div class="flex items-center gap-2 min-w-0">
         <button
