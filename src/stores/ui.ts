@@ -1,16 +1,29 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { supabase } from '@/config/supabase'
 
 type Theme = 'light' | 'dark' | 'midnight' | 'forest'
 type DisplayMode = 'comfortable' | 'compact' | 'feed'
 type PaginationMode = 'infinite' | 'paginated'
+type SortOrder = 'newest_first' | 'oldest_first'
 
-const LS_THEME = 'acta:theme'
-const LS_DISPLAY_MODE = 'acta:displayMode'
-const LS_SIDEBAR_OPEN = 'acta:sidebarOpen'
-const LS_LIST_WIDTH = 'acta:listWidth'
-const LS_PAGINATION_MODE = 'acta:paginationMode'
-const LS_ENTRIES_PER_PAGE = 'acta:entriesPerPage'
+// ---------------------------------------------------------------------------
+// localStorage keys
+// ---------------------------------------------------------------------------
+const LS = {
+  theme: 'acta:theme',
+  displayMode: 'acta:displayMode',
+  sidebarOpen: 'acta:sidebarOpen',
+  listWidth: 'acta:listWidth',
+  paginationMode: 'acta:paginationMode',
+  entriesPerPage: 'acta:entriesPerPage',
+  markReadOnScroll: 'acta:markReadOnScroll',
+  showImages: 'acta:showImages',
+  openLinksInNewTab: 'acta:openLinksInNewTab',
+  defaultSortOrder: 'acta:defaultSortOrder',
+  notifyNewEntries: 'acta:notifyNewEntries',
+  notifyEmail: 'acta:notifyEmail',
+} as const
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -24,35 +37,110 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 
 export const useUIStore = defineStore('ui', () => {
   // ---------------------------------------------------------------------------
-  // State — all persisted to localStorage
+  // State: DB-synced settings (initialized from localStorage cache)
   // ---------------------------------------------------------------------------
-  const theme = ref<Theme>(loadFromStorage<Theme>(LS_THEME, 'light'))
+  const theme = ref<Theme>(loadFromStorage<Theme>(LS.theme, 'light'))
   const displayMode = ref<DisplayMode>(
-    loadFromStorage<DisplayMode>(LS_DISPLAY_MODE, 'comfortable'),
+    loadFromStorage<DisplayMode>(LS.displayMode, 'comfortable'),
   )
-  const sidebarOpen = ref<boolean>(
-    window.innerWidth < 768 ? false : loadFromStorage<boolean>(LS_SIDEBAR_OPEN, true),
-  )
-  const listWidth = ref<number>(loadFromStorage<number>(LS_LIST_WIDTH, 380))
   const paginationMode = ref<PaginationMode>(
-    loadFromStorage<PaginationMode>(LS_PAGINATION_MODE, 'infinite'),
+    loadFromStorage<PaginationMode>(LS.paginationMode, 'infinite'),
   )
-  const entriesPerPage = ref<number>(loadFromStorage<number>(LS_ENTRIES_PER_PAGE, 25))
+  const entriesPerPage = ref<number>(loadFromStorage<number>(LS.entriesPerPage, 25))
+  const markReadOnScroll = ref<boolean>(loadFromStorage<boolean>(LS.markReadOnScroll, true))
+  const showImages = ref<boolean>(loadFromStorage<boolean>(LS.showImages, true))
+  const openLinksInNewTab = ref<boolean>(loadFromStorage<boolean>(LS.openLinksInNewTab, true))
+  const defaultSortOrder = ref<SortOrder>(
+    loadFromStorage<SortOrder>(LS.defaultSortOrder, 'newest_first'),
+  )
+  const notifyNewEntries = ref<boolean>(loadFromStorage<boolean>(LS.notifyNewEntries, false))
+  const notifyEmail = ref<boolean>(loadFromStorage<boolean>(LS.notifyEmail, false))
 
-  // Transient UI state (not persisted)
+  // ---------------------------------------------------------------------------
+  // State: Device-local settings (localStorage only, never synced to DB)
+  // ---------------------------------------------------------------------------
+  const sidebarOpen = ref<boolean>(
+    window.innerWidth < 768 ? false : loadFromStorage<boolean>(LS.sidebarOpen, true),
+  )
+  const listWidth = ref<number>(loadFromStorage<number>(LS.listWidth, 380))
+
+  // ---------------------------------------------------------------------------
+  // State: Transient UI (not persisted anywhere)
+  // ---------------------------------------------------------------------------
   const readerOpen = ref(false)
   const searchOpen = ref(false)
   const shortcutsDialogOpen = ref(false)
 
   // ---------------------------------------------------------------------------
-  // Watchers — persist to localStorage on change
+  // DB sync state
   // ---------------------------------------------------------------------------
-  watch(theme, (val) => localStorage.setItem(LS_THEME, JSON.stringify(val)))
-  watch(displayMode, (val) => localStorage.setItem(LS_DISPLAY_MODE, JSON.stringify(val)))
-  watch(sidebarOpen, (val) => localStorage.setItem(LS_SIDEBAR_OPEN, JSON.stringify(val)))
-  watch(listWidth, (val) => localStorage.setItem(LS_LIST_WIDTH, JSON.stringify(val)))
-  watch(paginationMode, (val) => localStorage.setItem(LS_PAGINATION_MODE, JSON.stringify(val)))
-  watch(entriesPerPage, (val) => localStorage.setItem(LS_ENTRIES_PER_PAGE, JSON.stringify(val)))
+  const settingsLoaded = ref(false)
+  let _dbSyncEnabled = false
+
+  let _dbSaveTimer: ReturnType<typeof setTimeout> | null = null
+  const DB_SAVE_DELAY = 1000
+
+  function _getSyncedSnapshot(): Record<string, unknown> {
+    return {
+      custom_theme: theme.value,
+      display_mode: displayMode.value,
+      pagination_mode: paginationMode.value,
+      entries_per_page: entriesPerPage.value,
+      mark_read_on_scroll: markReadOnScroll.value,
+      show_images: showImages.value,
+      open_links_in_new_tab: openLinksInNewTab.value,
+      default_sort_order: defaultSortOrder.value,
+      notify_new_entries: notifyNewEntries.value,
+      notify_email: notifyEmail.value,
+    }
+  }
+
+  function _scheduleDatabaseSave(): void {
+    if (!_dbSyncEnabled) return
+    if (_dbSaveTimer) clearTimeout(_dbSaveTimer)
+    _dbSaveTimer = setTimeout(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (!session) return
+
+        await supabase
+          .from('user_settings')
+          .update(_getSyncedSnapshot())
+          .eq('user_id', session.user.id)
+      } catch (err) {
+        console.error('Failed to save settings to DB:', err)
+      }
+    }, DB_SAVE_DELAY)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Watchers — persist to localStorage + schedule DB save for synced settings
+  // ---------------------------------------------------------------------------
+  const syncedRefs = [
+    { ref: theme, key: LS.theme },
+    { ref: displayMode, key: LS.displayMode },
+    { ref: paginationMode, key: LS.paginationMode },
+    { ref: entriesPerPage, key: LS.entriesPerPage },
+    { ref: markReadOnScroll, key: LS.markReadOnScroll },
+    { ref: showImages, key: LS.showImages },
+    { ref: openLinksInNewTab, key: LS.openLinksInNewTab },
+    { ref: defaultSortOrder, key: LS.defaultSortOrder },
+    { ref: notifyNewEntries, key: LS.notifyNewEntries },
+    { ref: notifyEmail, key: LS.notifyEmail },
+  ] as const
+
+  for (const { ref: settingRef, key } of syncedRefs) {
+    watch(settingRef, (val) => {
+      localStorage.setItem(key, JSON.stringify(val))
+      _scheduleDatabaseSave()
+    })
+  }
+
+  // Device-local settings: localStorage only
+  watch(sidebarOpen, (val) => localStorage.setItem(LS.sidebarOpen, JSON.stringify(val)))
+  watch(listWidth, (val) => localStorage.setItem(LS.listWidth, JSON.stringify(val)))
 
   // Apply the theme class to the document whenever it changes
   watch(
@@ -70,6 +158,54 @@ export const useUIStore = defineStore('ui', () => {
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
+
+  /**
+   * Load settings from the DB after authentication.
+   * DB values are the source of truth and overwrite localStorage cache.
+   */
+  async function loadSettingsFromDB(userId: string): Promise<void> {
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
+
+      if (error) throw error
+      if (!data) return
+
+      // Prevent write-back to DB while applying loaded values
+      _dbSyncEnabled = false
+
+      theme.value = (data.custom_theme as Theme) || 'light'
+      displayMode.value = data.display_mode || 'comfortable'
+      paginationMode.value = (data.pagination_mode as PaginationMode) || 'infinite'
+      entriesPerPage.value = data.entries_per_page ?? 25
+      markReadOnScroll.value = data.mark_read_on_scroll ?? true
+      showImages.value = data.show_images ?? true
+      openLinksInNewTab.value = data.open_links_in_new_tab ?? true
+      defaultSortOrder.value = (data.default_sort_order as SortOrder) || 'newest_first'
+      notifyNewEntries.value = data.notify_new_entries ?? false
+      notifyEmail.value = data.notify_email ?? false
+
+      settingsLoaded.value = true
+      _dbSyncEnabled = true
+    } catch (err) {
+      console.error('Failed to load settings from DB:', err)
+      _dbSyncEnabled = true
+      settingsLoaded.value = true
+    }
+  }
+
+  /** Reset sync state on logout. */
+  function resetSyncState(): void {
+    _dbSyncEnabled = false
+    settingsLoaded.value = false
+    if (_dbSaveTimer) {
+      clearTimeout(_dbSaveTimer)
+      _dbSaveTimer = null
+    }
+  }
 
   function setTheme(newTheme: Theme): void {
     theme.value = newTheme
@@ -116,17 +252,29 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   return {
-    // State
+    // DB-synced settings
     theme,
     displayMode,
-    sidebarOpen,
-    listWidth,
     paginationMode,
     entriesPerPage,
+    markReadOnScroll,
+    showImages,
+    openLinksInNewTab,
+    defaultSortOrder,
+    notifyNewEntries,
+    notifyEmail,
+    // Device-local settings
+    sidebarOpen,
+    listWidth,
+    // Transient state
     readerOpen,
     searchOpen,
     shortcutsDialogOpen,
+    // Sync state
+    settingsLoaded,
     // Actions
+    loadSettingsFromDB,
+    resetSyncState,
     setTheme,
     toggleSidebar,
     closeSidebar,

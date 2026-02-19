@@ -89,7 +89,11 @@ useKeyboardShortcuts([
 ])
 
 onMounted(async () => {
-  await Promise.all([feedStore.fetchFeeds(), groupStore.fetchGroups()])
+  await Promise.all([
+    feedStore.fetchFeeds(),
+    groupStore.fetchGroups(),
+    ui.loadSettingsFromDB(authStore.user!.id),
+  ])
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
   window.addEventListener('resize', onResize)

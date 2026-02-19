@@ -1,21 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref } from 'vue'
 import { Bars3Icon } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
-import { useFeedStore } from '@/stores/feeds'
 import { useNotificationStore } from '@/stores/notifications'
 import { supabase } from '@/config/supabase'
-import type { UserSettings } from '@/types/models'
 import GroupsSettingsTab from '@/components/settings/GroupsSettingsTab.vue'
 
 const authStore = useAuthStore()
 const ui = useUIStore()
-const feedStore = useFeedStore()
 const notifications = useNotificationStore()
 
-const settings = ref<UserSettings | null>(null)
-const loading = ref(false)
 const activeTab = ref('general')
 
 const tabs = [
@@ -26,70 +21,6 @@ const tabs = [
   { id: 'import-export', label: 'Import / Export' },
   { id: 'keyboard', label: 'Keyboard Shortcuts' },
 ]
-
-async function fetchSettings() {
-  const { data } = await supabase
-    .from('user_settings')
-    .select('*')
-    .eq('user_id', authStore.user?.id)
-    .single()
-  if (data) settings.value = data as UserSettings
-}
-
-// Re-fetch settings on tab return if they failed to load
-function handleVisibilityChange() {
-  if (document.visibilityState === 'visible' && !settings.value) {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) fetchSettings()
-    })
-  }
-}
-
-onMounted(() => {
-  fetchSettings()
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-})
-
-async function saveSettings() {
-  if (!settings.value) return
-  loading.value = true
-  try {
-    const { error } = await supabase
-      .from('user_settings')
-      .update({
-        theme: settings.value.theme,
-        custom_theme: settings.value.custom_theme,
-        display_mode: settings.value.display_mode,
-        mark_read_on_scroll: settings.value.mark_read_on_scroll,
-        show_images: settings.value.show_images,
-        open_links_in_new_tab: settings.value.open_links_in_new_tab,
-        notify_new_entries: settings.value.notify_new_entries,
-        notify_email: settings.value.notify_email,
-        entries_per_page: settings.value.entries_per_page,
-        pagination_mode: settings.value.pagination_mode,
-      })
-      .eq('user_id', authStore.user?.id)
-    if (error) throw error
-    // Sync UI store
-    if (settings.value.custom_theme) {
-      ui.setTheme(settings.value.custom_theme as any)
-    }
-    if (settings.value.display_mode) {
-      ui.setDisplayMode(settings.value.display_mode)
-    }
-    ui.setPaginationMode(settings.value.pagination_mode)
-    ui.setEntriesPerPage(settings.value.entries_per_page)
-    notifications.success('Settings saved')
-  } catch (e: any) {
-    notifications.error('Failed to save settings')
-  } finally {
-    loading.value = false
-  }
-}
 
 async function handleExportOPML() {
   try {
@@ -194,7 +125,7 @@ const shortcuts = [
       </div>
 
       <!-- General -->
-      <div v-if="activeTab === 'general' && settings" class="space-y-6">
+      <div v-if="activeTab === 'general'" class="space-y-6">
         <div>
           <label class="block text-sm font-medium text-text-secondary mb-2">Theme</label>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -203,11 +134,11 @@ const shortcuts = [
               :key="t.value"
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
               :class="
-                settings.custom_theme === t.value
+                ui.theme === t.value
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'hover:bg-bg-hover text-text-secondary'
               "
-              @click="settings.custom_theme = t.value"
+              @click="ui.setTheme(t.value as any)"
             >
               {{ t.label }}
             </button>
@@ -220,33 +151,33 @@ const shortcuts = [
             <button
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
               :class="
-                settings.display_mode === 'comfortable'
+                ui.displayMode === 'comfortable'
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'hover:bg-bg-hover text-text-secondary'
               "
-              @click="settings.display_mode = 'comfortable'"
+              @click="ui.setDisplayMode('comfortable')"
             >
               Comfortable
             </button>
             <button
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
               :class="
-                settings.display_mode === 'compact'
+                ui.displayMode === 'compact'
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'hover:bg-bg-hover text-text-secondary'
               "
-              @click="settings.display_mode = 'compact'"
+              @click="ui.setDisplayMode('compact')"
             >
               Compact
             </button>
             <button
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
               :class="
-                settings.display_mode === 'feed'
+                ui.displayMode === 'feed'
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'hover:bg-bg-hover text-text-secondary'
               "
-              @click="settings.display_mode = 'feed'"
+              @click="ui.setDisplayMode('feed')"
             >
               Feed
             </button>
@@ -259,29 +190,29 @@ const shortcuts = [
             <button
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
               :class="
-                settings.pagination_mode === 'infinite'
+                ui.paginationMode === 'infinite'
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'hover:bg-bg-hover text-text-secondary'
               "
-              @click="settings.pagination_mode = 'infinite'"
+              @click="ui.setPaginationMode('infinite')"
             >
               Infinite Scroll
             </button>
             <button
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
               :class="
-                settings.pagination_mode === 'paginated'
+                ui.paginationMode === 'paginated'
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'hover:bg-bg-hover text-text-secondary'
               "
-              @click="settings.pagination_mode = 'paginated'"
+              @click="ui.setPaginationMode('paginated')"
             >
               Paginated
             </button>
           </div>
         </div>
 
-        <div v-if="settings.pagination_mode === 'paginated'">
+        <div v-if="ui.paginationMode === 'paginated'">
           <label class="block text-sm font-medium text-text-secondary mb-2">Entries Per Page</label>
           <div class="grid grid-cols-3 gap-2">
             <button
@@ -289,11 +220,11 @@ const shortcuts = [
               :key="size"
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
               :class="
-                settings.entries_per_page === size
+                ui.entriesPerPage === size
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'hover:bg-bg-hover text-text-secondary'
               "
-              @click="settings.entries_per_page = size"
+              @click="ui.setEntriesPerPage(size)"
             >
               {{ size }}
             </button>
@@ -302,7 +233,7 @@ const shortcuts = [
 
         <label class="flex items-center gap-3 cursor-pointer">
           <input
-            v-model="settings.mark_read_on_scroll"
+            v-model="ui.markReadOnScroll"
             type="checkbox"
             class="rounded border-border"
           />
@@ -310,22 +241,18 @@ const shortcuts = [
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
-          <input v-model="settings.show_images" type="checkbox" class="rounded border-border" />
+          <input v-model="ui.showImages" type="checkbox" class="rounded border-border" />
           <span class="text-sm text-text-primary">Show images in entries</span>
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
           <input
-            v-model="settings.open_links_in_new_tab"
+            v-model="ui.openLinksInNewTab"
             type="checkbox"
             class="rounded border-border"
           />
           <span class="text-sm text-text-primary">Open links in new tab</span>
         </label>
-
-        <button class="btn-primary" :disabled="loading" @click="saveSettings">
-          {{ loading ? 'Saving...' : 'Save Settings' }}
-        </button>
       </div>
 
       <!-- Account -->
@@ -348,10 +275,10 @@ const shortcuts = [
       </div>
 
       <!-- Notifications -->
-      <div v-if="activeTab === 'notifications' && settings" class="space-y-4">
+      <div v-if="activeTab === 'notifications'" class="space-y-4">
         <label class="flex items-center gap-3 cursor-pointer">
           <input
-            v-model="settings.notify_new_entries"
+            v-model="ui.notifyNewEntries"
             type="checkbox"
             class="rounded border-border"
           />
@@ -359,13 +286,9 @@ const shortcuts = [
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
-          <input v-model="settings.notify_email" type="checkbox" class="rounded border-border" />
+          <input v-model="ui.notifyEmail" type="checkbox" class="rounded border-border" />
           <span class="text-sm text-text-primary">Email notifications</span>
         </label>
-
-        <button class="btn-primary" :disabled="loading" @click="saveSettings">
-          {{ loading ? 'Saving...' : 'Save' }}
-        </button>
       </div>
 
       <!-- Groups -->

@@ -4,6 +4,7 @@ import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/config/supabase'
 import router from '@/router'
 import type { UserProfile } from '@/types/models'
+import { useUIStore } from './ui'
 
 export const useAuthStore = defineStore('auth', () => {
   // ---------------------------------------------------------------------------
@@ -97,6 +98,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (event === 'SIGNED_OUT') {
         profile.value = null
+        useUIStore().resetSyncState()
       }
 
       if (event === 'TOKEN_REFRESHED') {
@@ -184,6 +186,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = null
       profile.value = null
       session.value = null
+      useUIStore().resetSyncState()
       router.push({ name: 'marketing' })
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Logout failed'
