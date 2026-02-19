@@ -680,6 +680,7 @@ onMounted(() => {
                     v-if="managedFeed.site_url"
                     :href="managedFeed.site_url"
                     target="_blank"
+                    rel="noopener noreferrer"
                     class="text-xs text-accent hover:underline truncate block"
                   >{{ managedFeed.site_url }}</a>
                 </div>

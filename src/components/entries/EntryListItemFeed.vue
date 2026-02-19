@@ -2,6 +2,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import type { Entry } from '@/types/models'
 import { useEntryStore } from '@/stores/entries'
+import { useUIStore } from '@/stores/ui'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { RssIcon } from '@heroicons/vue/24/outline'
 import {
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 }>()
 
 const entryStore = useEntryStore()
+const ui = useUIStore()
 
 let markReadTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -113,7 +115,13 @@ function toggleRead(e: Event) {
 
 function openExternal(e: Event) {
   e.stopPropagation()
-  if (props.entry.url) window.open(props.entry.url, '_blank')
+  if (props.entry.url) {
+    if (ui.openLinksInNewTab) {
+      window.open(props.entry.url, '_blank')
+    } else {
+      window.location.href = props.entry.url
+    }
+  }
 }
 
 function copyLink(e: Event) {
@@ -208,7 +216,7 @@ function collapse(e: Event) {
         <div v-if="entry.url" class="mt-4">
           <a
             :href="entry.url"
-            target="_blank"
+            :target="ui.openLinksInNewTab ? '_blank' : undefined"
             rel="noopener noreferrer"
             class="text-sm font-medium text-accent hover:underline"
             @click.stop

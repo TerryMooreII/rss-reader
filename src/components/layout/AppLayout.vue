@@ -67,7 +67,13 @@ useKeyboardShortcuts([
     key: 'o',
     handler: () => {
       const entry = entryStore.selectedEntry
-      if (entry?.url) window.open(entry.url, '_blank')
+      if (entry?.url) {
+        if (ui.openLinksInNewTab) {
+          window.open(entry.url, '_blank')
+        } else {
+          window.location.href = entry.url
+        }
+      }
     },
     description: 'Open in browser',
   },

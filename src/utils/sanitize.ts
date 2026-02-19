@@ -39,6 +39,14 @@ DOMPurify.addHook('uponSanitizeElement', (node) => {
   }
 })
 
+// Force all links in feed content to open in a new tab
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A' && (node as Element).hasAttribute('href')) {
+    ;(node as Element).setAttribute('target', '_blank')
+    ;(node as Element).setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
 const SANITIZE_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
   ADD_TAGS: ['iframe'],
   ADD_ATTR: [

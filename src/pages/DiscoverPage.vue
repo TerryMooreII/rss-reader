@@ -296,7 +296,7 @@ onMounted(loadFeeds)
                   <a
                     v-if="entry.url"
                     :href="entry.url"
-                    target="_blank"
+                    :target="ui.openLinksInNewTab ? '_blank' : undefined"
                     rel="noopener noreferrer"
                     class="flex items-baseline gap-3 rounded-md px-2 py-1.5 -mx-2 hover:bg-bg-hover transition-colors group"
                     @click.stop

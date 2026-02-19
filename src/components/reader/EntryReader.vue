@@ -81,7 +81,13 @@ function toggleStar() {
 }
 
 function openExternal() {
-  if (entry.value?.url) window.open(entry.value.url, '_blank')
+  if (entry.value?.url) {
+    if (ui.openLinksInNewTab) {
+      window.open(entry.value.url, '_blank')
+    } else {
+      window.location.href = entry.value.url
+    }
+  }
 }
 
 function shareLink() {
@@ -181,7 +187,7 @@ function shareLink() {
         <div v-if="entry.url" class="mt-8 border-t pt-4">
           <a
             :href="entry.url"
-            target="_blank"
+            :target="ui.openLinksInNewTab ? '_blank' : undefined"
             rel="noopener noreferrer"
             class="text-sm font-medium text-accent hover:underline"
           >
