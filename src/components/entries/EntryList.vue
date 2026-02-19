@@ -91,7 +91,7 @@ watch(() => entryStore.filter, () => {
 </script>
 
 <template>
-  <div ref="scrollContainer" class="flex-1 overflow-y-auto">
+  <div ref="scrollContainer" class="flex-1 overflow-y-auto pb-16 md:pb-0">
     <!-- Empty state -->
     <div
       v-if="!entryStore.loading && entryStore.entries.length === 0"

@@ -40,7 +40,7 @@ function onPointerUp() {
   <div class="flex h-full overflow-hidden">
     <!-- Entry list pane -->
     <div
-      class="flex flex-col shrink-0"
+      class="flex flex-col shrink-0 min-w-0"
       :class="[
         showReader ? 'hidden md:flex border-r border-border' : 'flex-1',
         !isFeedMode ? 'border-r border-border' : '',

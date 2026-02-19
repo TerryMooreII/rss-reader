@@ -222,7 +222,7 @@ onMounted(loadFeeds)
         >
           <!-- Feed header row -->
           <div
-            class="flex items-center gap-4 p-4 cursor-pointer hover:bg-bg-hover transition-colors rounded-lg"
+            class="flex items-center gap-2 sm:gap-4 p-3 sm:p-4 cursor-pointer hover:bg-bg-hover transition-colors rounded-lg"
             @click="togglePreview(feed.id)"
           >
             <ChevronRightIcon
@@ -233,10 +233,10 @@ onMounted(loadFeeds)
               v-if="feed.favicon_url && !faviconErrors.has(feed.id)"
               :src="feed.favicon_url"
               alt=""
-              class="h-8 w-8 rounded shrink-0"
+              class="h-6 w-6 sm:h-8 sm:w-8 rounded shrink-0"
               @error="faviconErrors.add(feed.id)"
             />
-            <RssIcon v-else class="h-8 w-8 shrink-0 text-text-muted" />
+            <RssIcon v-else class="h-6 w-6 sm:h-8 sm:w-8 shrink-0 text-text-muted" />
 
             <div class="flex-1 min-w-0">
               <h3 class="font-medium text-text-primary truncate">
@@ -245,9 +245,9 @@ onMounted(loadFeeds)
               <p v-if="feed.description" class="text-sm text-text-muted line-clamp-1">
                 {{ feed.description }}
               </p>
-              <div class="flex items-center gap-2 text-xs text-text-muted">
+              <div class="flex items-center gap-1.5 text-xs text-text-muted whitespace-nowrap">
                 <span class="capitalize">{{ feed.category.replace('_', ' ') }}</span>
-                <span v-if="feed.subscriber_count" class="text-text-muted">&middot; {{ feed.subscriber_count }} {{ feed.subscriber_count === 1 ? 'subscriber' : 'subscribers' }}</span>
+                <span v-if="feed.subscriber_count">&middot; {{ feed.subscriber_count }} {{ feed.subscriber_count === 1 ? 'subscriber' : 'subscribers' }}</span>
               </div>
             </div>
 
@@ -260,7 +260,7 @@ onMounted(loadFeeds)
               <span v-if="actionLoading === feed.id" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
               <template v-else>
                 <CheckIcon class="h-4 w-4 group-hover/sub:hidden" />
-                <span class="group-hover/sub:hidden">Subscribed</span>
+                <span class="hidden sm:inline group-hover/sub:hidden">Subscribed</span>
                 <span class="hidden group-hover/sub:inline text-danger">Unsubscribe</span>
               </template>
             </button>
@@ -273,7 +273,7 @@ onMounted(loadFeeds)
               <span v-if="actionLoading === feed.id" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               <template v-else>
                 <PlusIcon class="h-4 w-4" />
-                Subscribe
+                <span class="hidden sm:inline">Subscribe</span>
               </template>
             </button>
           </div>

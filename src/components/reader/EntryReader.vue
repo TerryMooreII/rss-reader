@@ -105,7 +105,7 @@ function shareLink() {
       <div class="flex items-center gap-2">
         <button class="btn-ghost text-xs gap-1" aria-label="Open original article" @click="openExternal">
           <ArrowTopRightOnSquareIcon class="h-4 w-4" />
-          Open
+          <span class="hidden md:inline">Open</span>
         </button>
         <button
           class="btn-ghost text-xs gap-1"
@@ -115,23 +115,23 @@ function shareLink() {
         >
           <StarSolid v-if="isStarred" class="h-4 w-4 text-star" />
           <StarOutline v-else class="h-4 w-4" />
-          {{ isStarred ? 'Starred' : 'Star' }}
+          <span class="hidden md:inline">{{ isStarred ? 'Starred' : 'Star' }}</span>
         </button>
         <button class="btn-ghost text-xs gap-1" aria-label="Copy link to clipboard" @click="shareLink">
           <ShareIcon class="h-4 w-4" />
-          Share
+          <span class="hidden md:inline">Share</span>
         </button>
       </div>
       <div class="flex items-center gap-2">
         <button class="btn-ghost text-xs gap-1" aria-label="Close reader" @click="entryStore.selectEntry(null)">
           <XMarkIcon class="h-4 w-4" />
-          Close
+          <span class="hidden md:inline">Close</span>
         </button>
       </div>
     </div>
 
     <!-- Article content -->
-    <div class="flex-1 overflow-y-auto px-6 py-6 md:px-10 md:py-8">
+    <div class="flex-1 overflow-y-auto px-4 py-6 pb-10 md:px-10 md:py-8 md:pb-8">
       <article class="mx-auto max-w-2xl">
         <!-- Feed info -->
         <div class="mb-4 flex items-center gap-2 text-xs text-text-muted">

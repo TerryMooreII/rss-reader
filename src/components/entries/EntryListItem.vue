@@ -32,7 +32,7 @@ const isRead = computed(() => !!props.entry.read_at)
 
 <template>
   <article
-    class="flex items-center gap-3 border-b px-4 py-2.5 cursor-pointer transition-colors outline-none"
+    class="flex items-center gap-3 border-b px-4 py-2.5 cursor-pointer transition-colors outline-none overflow-hidden"
     :class="[
       selected ? 'bg-bg-active' : 'hover:bg-bg-hover',
     ]"

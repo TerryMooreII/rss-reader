@@ -129,7 +129,7 @@ function collapse(e: Event) {
 
 <template>
   <article
-    class="group/entry border-b border-border cursor-pointer transition-colors outline-none"
+    class="group/entry border-b border-border cursor-pointer transition-colors outline-none overflow-hidden"
     :class="[
       expanded ? 'bg-bg-secondary/50' : 'hover:bg-bg-hover',
     ]"
@@ -220,7 +220,7 @@ function collapse(e: Event) {
 
       <!-- Action bar -->
       <div
-        class="flex items-center gap-1 mt-3 -ml-1.5 transition-opacity"
+        class="flex items-center gap-1 mt-3 -ml-1.5 transition-opacity flex-wrap"
         :class="expanded ? 'opacity-100' : 'opacity-0 group-hover/entry:opacity-100 focus-within:opacity-100'"
       >
         <button
@@ -232,7 +232,7 @@ function collapse(e: Event) {
         >
           <StarSolid v-if="isStarred" class="h-4 w-4" />
           <StarOutline v-else class="h-4 w-4" />
-          <span>{{ isStarred ? 'Starred' : 'Star' }}</span>
+          <span class="hidden md:inline">{{ isStarred ? 'Starred' : 'Star' }}</span>
         </button>
 
         <button
@@ -242,7 +242,7 @@ function collapse(e: Event) {
         >
           <EyeSlashIcon v-if="isRead" class="h-4 w-4" />
           <EyeIcon v-else class="h-4 w-4" />
-          <span>{{ isRead ? 'Mark Unread' : 'Mark Read' }}</span>
+          <span class="hidden md:inline">{{ isRead ? 'Mark Unread' : 'Mark Read' }}</span>
         </button>
 
         <button
@@ -251,7 +251,7 @@ function collapse(e: Event) {
           @click="openExternal"
         >
           <ArrowTopRightOnSquareIcon class="h-4 w-4" />
-          <span>Open</span>
+          <span class="hidden md:inline">Open</span>
         </button>
 
         <button
@@ -260,7 +260,7 @@ function collapse(e: Event) {
           @click="copyLink"
         >
           <LinkIcon class="h-4 w-4" />
-          <span>Share</span>
+          <span class="hidden md:inline">Share</span>
         </button>
 
         <!-- Collapse button (when expanded) -->
@@ -271,7 +271,7 @@ function collapse(e: Event) {
           @click="collapse"
         >
           <ChevronUpIcon class="h-4 w-4" />
-          <span>Collapse</span>
+          <span class="hidden md:inline">Collapse</span>
         </button>
       </div>
     </div>

@@ -37,7 +37,7 @@ const excerpt = computed(() => {
 
 <template>
   <article
-    class="border-b px-4 py-3 cursor-pointer transition-colors outline-none"
+    class="border-b px-4 py-3 cursor-pointer transition-colors outline-none overflow-hidden"
     :class="[
       selected ? 'bg-bg-active' : 'hover:bg-bg-hover',
     ]"
@@ -60,7 +60,7 @@ const excerpt = computed(() => {
     </div>
 
     <h3
-      class="text-sm leading-snug mb-1"
+      class="text-sm leading-snug mb-1 line-clamp-2"
       :class="isRead ? 'text-text-muted' : 'text-text-primary font-semibold'"
     >
       {{ entry.title || 'Untitled' }}

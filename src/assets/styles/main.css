@@ -34,6 +34,10 @@
     border-color: rgb(var(--c-border));
   }
 
+  html, body {
+    overflow-x: hidden;
+  }
+
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -112,6 +116,29 @@
 
 .prose :where(hr) {
   border-color: rgb(var(--c-border));
+}
+
+.prose {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.prose :where(pre) {
+  overflow-x: auto;
+}
+
+.prose :where(img) {
+  max-width: 100%;
+  height: auto;
+}
+
+.prose :where(table) {
+  display: block;
+  overflow-x: auto;
+}
+
+.prose :where(iframe) {
+  max-width: 100%;
 }
 
 /* Component utility classes */
@@ -220,4 +247,8 @@
   background-color: rgb(var(--c-accent) / 0.12);
   color: rgb(var(--c-accent));
   font-weight: 500;
+}
+
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
