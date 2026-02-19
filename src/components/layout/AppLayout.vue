@@ -7,6 +7,7 @@ import { useEntryStore } from '@/stores/entries'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupStore } from '@/stores/groups'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { useSwipe } from '@/composables/useSwipe'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import MobileNav from '@/components/layout/MobileNav.vue'
 
@@ -18,6 +19,19 @@ const authStore = useAuthStore()
 const groupStore = useGroupStore()
 
 const isMobile = ref(window.innerWidth < 768)
+const sidebarRef = ref<InstanceType<typeof AppSidebar> | null>(null)
+const sidebarEl = ref<HTMLElement | null>(null)
+
+// Update sidebarEl when the component ref changes
+watch(sidebarRef, (comp) => {
+  sidebarEl.value = comp?.$el ?? null
+}, { immediate: true })
+
+useSwipe({
+  target: sidebarEl,
+  direction: 'left',
+  onSwipe: () => { if (isMobile.value) ui.closeSidebar() },
+})
 
 function onResize() {
   const wasMobile = isMobile.value
@@ -211,6 +225,7 @@ async function refetchAllData() {
     <!-- Sidebar -->
     <Transition name="slide-left">
       <AppSidebar
+        ref="sidebarRef"
         v-show="ui.sidebarOpen"
         class="fixed z-40 h-full md:static md:z-auto"
         :class="[ui.sidebarOpen ? 'w-64' : 'w-0']"

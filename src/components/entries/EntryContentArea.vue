@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useEntryStore } from '@/stores/entries'
+import { useSwipe } from '@/composables/useSwipe'
 import EntryListHeader from './EntryListHeader.vue'
 import EntryList from './EntryList.vue'
 import EntryReader from '@/components/reader/EntryReader.vue'
@@ -12,6 +13,13 @@ const ui = useUIStore()
 const entryStore = useEntryStore()
 
 const dragging = ref(false)
+const mobileReaderRef = ref<HTMLElement | null>(null)
+
+useSwipe({
+  target: mobileReaderRef,
+  direction: 'right',
+  onSwipe: () => ui.closeReader(),
+})
 
 const isFeedMode = computed(() => ui.displayMode === 'feed')
 const showReader = computed(() => ui.readerOpen && !isFeedMode.value)
@@ -72,6 +80,7 @@ function onPointerUp() {
     <Teleport to="body">
       <Transition name="slide-right">
         <div
+          ref="mobileReaderRef"
           v-if="showReader && entryStore.selectedEntry"
           class="fixed inset-0 z-50 bg-bg-primary md:hidden"
         >
