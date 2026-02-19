@@ -51,6 +51,7 @@ const SANITIZE_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
     'sizes',
     'loading',
   ],
+  FORBID_ATTR: ['style'],
 }
 
 export function sanitizeHtml(html: string): string {

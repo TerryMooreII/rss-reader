@@ -407,12 +407,10 @@ export const useEntryStore = defineStore('entries', () => {
       const feedStore = useFeedStore()
       feedStore.updateUnreadCount(feedId, -(feedStore.feedById(feedId)?.unread_count ?? 0))
 
-      // Update visible entries if viewing this feed
-      if (filter.value.type === 'feed' && filter.value.feedId === feedId) {
-        const now = new Date().toISOString()
-        for (const entry of entries.value) {
-          if (!entry.read_at) entry.read_at = now
-        }
+      // Update any visible entries belonging to this feed
+      const now = new Date().toISOString()
+      for (const entry of entries.value) {
+        if (entry.feed_id === feedId && !entry.read_at) entry.read_at = now
       }
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to mark feed as read'
@@ -439,12 +437,11 @@ export const useEntryStore = defineStore('entries', () => {
       const group = groupStore.groups.find((g) => g.id === groupId)
       if (group) group.unread_count = 0
 
-      // Update visible entries if viewing this group
-      if (filter.value.type === 'group' && filter.value.groupId === groupId) {
-        const now = new Date().toISOString()
-        for (const entry of entries.value) {
-          if (!entry.read_at) entry.read_at = now
-        }
+      // Update any visible entries belonging to feeds in this group
+      const feedIdSet = new Set(feedIds)
+      const now = new Date().toISOString()
+      for (const entry of entries.value) {
+        if (feedIdSet.has(entry.feed_id) && !entry.read_at) entry.read_at = now
       }
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to mark group as read'
@@ -467,12 +464,11 @@ export const useEntryStore = defineStore('entries', () => {
       }
       feedStore.fetchCategoryUnreadCounts()
 
-      // Update visible entries if viewing this category
-      if (filter.value.type === 'category' && filter.value.category === category) {
-        const now = new Date().toISOString()
-        for (const entry of entries.value) {
-          if (!entry.read_at) entry.read_at = now
-        }
+      // Update any visible entries belonging to feeds in this category
+      const feedIdSet = new Set(feedsInCat.map((f) => f.id))
+      const now = new Date().toISOString()
+      for (const entry of entries.value) {
+        if (feedIdSet.has(entry.feed_id) && !entry.read_at) entry.read_at = now
       }
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to mark category as read'
