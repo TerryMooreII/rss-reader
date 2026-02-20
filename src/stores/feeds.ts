@@ -236,6 +236,18 @@ export const useFeedStore = defineStore('feeds', () => {
   }
 
   /**
+   * Optimistically update the category unread count for the category that
+   * the given feed belongs to.
+   */
+  function updateCategoryUnreadCount(feedId: string, delta: number): void {
+    const feed = feeds.value.find((f) => f.id === feedId)
+    if (!feed) return
+    const cat = feed.category || 'other'
+    const current = categoryUnreadCounts.value.get(cat) ?? 0
+    categoryUnreadCounts.value.set(cat, Math.max(0, current + delta))
+  }
+
+  /**
    * Toggle a category's expanded/collapsed state in the sidebar.
    */
   function toggleCategory(category: string): void {
@@ -290,6 +302,7 @@ export const useFeedStore = defineStore('feeds', () => {
     unsubscribeFeed,
     toggleFavorite,
     updateUnreadCount,
+    updateCategoryUnreadCount,
     toggleCategory,
     fetchCategoryUnreadCounts,
   }

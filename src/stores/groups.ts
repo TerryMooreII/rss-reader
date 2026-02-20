@@ -228,6 +228,21 @@ export const useGroupStore = defineStore('groups', () => {
   }
 
   /**
+   * Optimistically update the unread count for all groups that contain the
+   * given feed by the supplied delta.
+   */
+  function updateUnreadCountForFeed(feedId: string, delta: number): void {
+    for (const [groupId, feedIds] of groupFeeds.value) {
+      if (feedIds.includes(feedId)) {
+        const group = groups.value.find((g) => g.id === groupId)
+        if (group) {
+          group.unread_count = Math.max(0, (group.unread_count ?? 0) + delta)
+        }
+      }
+    }
+  }
+
+  /**
    * Toggle a group's expanded/collapsed state in the sidebar.
    */
   function toggleGroup(id: string): void {
@@ -263,5 +278,6 @@ export const useGroupStore = defineStore('groups', () => {
     addFeedToGroup,
     removeFeedFromGroup,
     toggleGroup,
+    updateUnreadCountForFeed,
   }
 })
