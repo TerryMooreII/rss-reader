@@ -30,7 +30,7 @@ import type { UserProfile, Feed } from '@/types/models'
 const ui = useUIStore()
 const notifications = useNotificationStore()
 
-const activeTab = ref<'feeds' | 'users' | 'cron'>('feeds')
+const activeTab = ref<'feeds' | 'users' | 'cron' | 'database'>('feeds')
 const feeds = ref<Feed[]>([])
 const users = ref<UserProfile[]>([])
 const loading = ref(false)
@@ -87,6 +87,103 @@ interface CronRun {
   duration_ms: number
 }
 const cronRuns = ref<CronRun[]>([])
+
+// Database tab state
+interface DbTableStat {
+  name: string
+  rows: number
+  size: string
+  size_bytes: number
+}
+interface EntryGrowth {
+  day: string
+  count: number
+}
+interface DbStats {
+  total_size: string
+  total_size_bytes: number
+  free_plan_limit_bytes: number
+  tables: DbTableStat[]
+  entry_growth: EntryGrowth[]
+}
+const dbStats = ref<DbStats | null>(null)
+const retentionDays = ref(30)
+const preserveStarred = ref(true)
+const loadingDbStats = ref(false)
+const savingRetention = ref(false)
+const runningCleanup = ref(false)
+
+async function loadDbStats() {
+  loadingDbStats.value = true
+  try {
+    const { data, error } = await supabase.rpc('get_database_stats')
+    if (error) throw error
+    dbStats.value = data as DbStats
+  } catch (e: any) {
+    notifications.error(e.message || 'Failed to load database stats')
+  } finally {
+    loadingDbStats.value = false
+  }
+}
+
+async function loadRetentionSettings() {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'entry_retention')
+      .single()
+    if (error) throw error
+    if (data?.value) {
+      retentionDays.value = data.value.days ?? 30
+      preserveStarred.value = data.value.preserve_starred ?? true
+    }
+  } catch (e: any) {
+    notifications.error(e.message || 'Failed to load retention settings')
+  }
+}
+
+async function saveRetentionSettings() {
+  savingRetention.value = true
+  try {
+    const { error } = await supabase
+      .from('system_settings')
+      .upsert({
+        key: 'entry_retention',
+        value: { days: retentionDays.value, preserve_starred: preserveStarred.value },
+        updated_at: new Date().toISOString(),
+      })
+    if (error) throw error
+    notifications.success('Retention settings saved')
+  } catch (e: any) {
+    notifications.error(e.message || 'Failed to save retention settings')
+  } finally {
+    savingRetention.value = false
+  }
+}
+
+async function runCleanupNow() {
+  if (!confirm('Run entry cleanup now? This will permanently delete entries older than the configured retention period.')) return
+  runningCleanup.value = true
+  try {
+    const { data, error } = await supabase.rpc('cleanup_old_entries')
+    if (error) throw error
+    const result = data as { deleted: number; cutoff: string }
+    notifications.success(`Cleanup complete: ${result.deleted} entries deleted`)
+    loadDbStats()
+  } catch (e: any) {
+    notifications.error(e.message || 'Failed to run cleanup')
+  } finally {
+    runningCleanup.value = false
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+  if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB'
+  return (bytes / 1073741824).toFixed(2) + ' GB'
+}
 
 // Admin import state
 const showImportModal = ref(false)
@@ -375,6 +472,17 @@ onMounted(() => {
         >
           Cron Jobs
         </button>
+        <button
+          class="px-3 py-2 text-sm font-medium border-b-2 transition-colors"
+          :class="
+            activeTab === 'database'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-text-secondary'
+          "
+          @click="activeTab = 'database'; loadDbStats(); loadRetentionSettings()"
+        >
+          Database
+        </button>
       </div>
 
       <!-- Feeds Table -->
@@ -627,6 +735,126 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
+      </div>
+      <!-- Database Tab -->
+      <div v-if="activeTab === 'database'">
+        <div v-if="loadingDbStats" class="py-8 text-center text-text-muted">Loading database stats...</div>
+        <div v-else-if="dbStats" class="space-y-6">
+          <!-- Storage Usage -->
+          <div class="rounded-lg border bg-bg-secondary p-4">
+            <h3 class="text-sm font-semibold text-text-primary mb-3">Storage Usage</h3>
+            <div class="mb-2">
+              <div class="flex justify-between text-xs text-text-muted mb-1">
+                <span>{{ formatBytes(dbStats.total_size_bytes) }} used</span>
+                <span>{{ formatBytes(dbStats.free_plan_limit_bytes) }} limit</span>
+              </div>
+              <div class="h-3 rounded-full bg-bg-tertiary overflow-hidden">
+                <div
+                  class="h-full rounded-full transition-all"
+                  :class="(dbStats.total_size_bytes / dbStats.free_plan_limit_bytes) > 0.8 ? 'bg-danger' : (dbStats.total_size_bytes / dbStats.free_plan_limit_bytes) > 0.6 ? 'bg-star' : 'bg-success'"
+                  :style="{ width: Math.min(100, (dbStats.total_size_bytes / dbStats.free_plan_limit_bytes) * 100).toFixed(1) + '%' }"
+                />
+              </div>
+            </div>
+            <p class="text-xs text-text-muted">
+              {{ ((dbStats.total_size_bytes / dbStats.free_plan_limit_bytes) * 100).toFixed(1) }}% of free plan limit
+            </p>
+          </div>
+
+          <!-- Table Breakdown -->
+          <div>
+            <h3 class="text-sm font-semibold text-text-primary mb-3">Table Sizes</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b text-left text-text-muted">
+                    <th class="pb-2 font-medium">Table</th>
+                    <th class="pb-2 font-medium text-right">Rows</th>
+                    <th class="pb-2 font-medium text-right">Size</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="table in dbStats.tables" :key="table.name" class="border-b last:border-0">
+                    <td class="py-2 pr-4 font-medium text-text-primary">{{ table.name }}</td>
+                    <td class="py-2 pr-4 text-text-muted text-right tabular-nums">{{ table.rows.toLocaleString() }}</td>
+                    <td class="py-2 text-text-muted text-right tabular-nums">{{ table.size }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Entry Growth -->
+          <div v-if="dbStats.entry_growth?.length">
+            <h3 class="text-sm font-semibold text-text-primary mb-3">Entry Growth (Last 30 Days)</h3>
+            <div class="overflow-x-auto max-h-64 overflow-y-auto">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-bg-primary">
+                  <tr class="border-b text-left text-text-muted">
+                    <th class="pb-2 font-medium">Date</th>
+                    <th class="pb-2 font-medium text-right">Entries Added</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="day in dbStats.entry_growth" :key="day.day" class="border-b last:border-0">
+                    <td class="py-1.5 pr-4 text-text-primary">{{ new Date(day.day).toLocaleDateString() }}</td>
+                    <td class="py-1.5 text-text-muted text-right tabular-nums">{{ day.count.toLocaleString() }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Retention Settings -->
+          <div class="rounded-lg border bg-bg-secondary p-4">
+            <h3 class="text-sm font-semibold text-text-primary mb-3">Entry Retention Policy</h3>
+            <p class="text-xs text-text-muted mb-4">
+              Entries older than the retention period are automatically deleted daily at 3:00 AM UTC.
+            </p>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-xs font-medium text-text-secondary mb-1">Retention Period (days)</label>
+                <input
+                  v-model.number="retentionDays"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="input text-sm w-32"
+                />
+              </div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  v-model="preserveStarred"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-border text-accent focus:ring-accent"
+                />
+                <span class="text-sm text-text-secondary">Preserve starred entries</span>
+              </label>
+              <div class="flex items-center gap-3 pt-2">
+                <button
+                  class="btn-primary text-sm py-2 px-4"
+                  :disabled="savingRetention"
+                  @click="saveRetentionSettings"
+                >
+                  {{ savingRetention ? 'Saving...' : 'Save Settings' }}
+                </button>
+                <button
+                  class="btn-ghost text-sm py-2 px-4 text-danger"
+                  :disabled="runningCleanup"
+                  @click="runCleanupNow"
+                >
+                  <ArrowPathIcon class="h-4 w-4 inline mr-1" :class="runningCleanup ? 'animate-spin' : ''" />
+                  {{ runningCleanup ? 'Running...' : 'Run Cleanup Now' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Refresh -->
+          <div class="flex justify-end">
+            <button class="btn-ghost text-xs" @click="loadDbStats">Refresh Stats</button>
+          </div>
+        </div>
       </div>
     </div>
 
