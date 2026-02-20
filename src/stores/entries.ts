@@ -501,20 +501,50 @@ export const useEntryStore = defineStore('entries', () => {
   async function silentRefresh(): Promise<void> {
     if (loading.value || loadingMore.value) return
 
+    const ui = useUIStore()
+
+    // Skip when reader is open — mutating entries risks orphaning the selected article
+    if (ui.readerOpen && selectedEntryId.value) return
+
     try {
-      const ui = useUIStore()
-      const cursor = pageCursors[currentPage.value - 1] ?? undefined
+      const isInfinite = ui.paginationMode === 'infinite'
+      const isSearch = filter.value.type === 'search'
 
-      if (filter.value.type === 'search') {
-        searchOffset = (currentPage.value - 1) * ui.entriesPerPage
-      }
+      if (isInfinite && !isSearch && entries.value.length > 0) {
+        // Merge page-1 results into the existing infinite-scroll array
+        const rows = await _callRpc(filter.value, undefined)
+        const existing = new Map(entries.value.map((e) => [e.id, e]))
 
-      const rows = await _callRpc(filter.value, cursor)
-      entries.value = rows
-      hasMore.value = rows.length >= ui.entriesPerPage
+        const newEntries: Entry[] = []
+        for (const row of rows) {
+          const old = existing.get(row.id)
+          if (old) {
+            old.read_at = row.read_at
+            old.starred_at = row.starred_at
+          } else {
+            newEntries.push(row)
+          }
+        }
 
-      if (filter.value.type === 'search') {
-        searchOffset = (currentPage.value - 1) * ui.entriesPerPage + rows.length
+        if (newEntries.length > 0) {
+          entries.value.unshift(...newEntries)
+        }
+        // Leave hasMore unchanged — the tail of the array hasn't changed
+      } else {
+        // Paginated mode, search, or empty array — replace entirely (current behavior)
+        const cursor = pageCursors[currentPage.value - 1] ?? undefined
+
+        if (isSearch) {
+          searchOffset = (currentPage.value - 1) * ui.entriesPerPage
+        }
+
+        const rows = await _callRpc(filter.value, cursor)
+        entries.value = rows
+        hasMore.value = rows.length >= ui.entriesPerPage
+
+        if (isSearch) {
+          searchOffset = (currentPage.value - 1) * ui.entriesPerPage + rows.length
+        }
       }
     } catch {
       // Silent refresh is best-effort; don't overwrite existing error state
