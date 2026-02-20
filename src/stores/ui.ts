@@ -6,6 +6,7 @@ type Theme = 'light' | 'dark' | 'midnight' | 'forest'
 type DisplayMode = 'comfortable' | 'compact' | 'feed'
 type PaginationMode = 'infinite' | 'paginated'
 type SortOrder = 'newest_first' | 'oldest_first'
+type FontSize = 'small' | 'medium' | 'large'
 
 // ---------------------------------------------------------------------------
 // localStorage keys
@@ -24,6 +25,7 @@ const LS = {
   notifyNewEntries: 'acta:notifyNewEntries',
   notifyEmail: 'acta:notifyEmail',
   unreadOnly: 'acta:unreadOnly',
+  fontSize: 'acta:fontSize',
 } as const
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -57,6 +59,7 @@ export const useUIStore = defineStore('ui', () => {
   const notifyNewEntries = ref<boolean>(loadFromStorage<boolean>(LS.notifyNewEntries, false))
   const notifyEmail = ref<boolean>(loadFromStorage<boolean>(LS.notifyEmail, false))
   const unreadOnly = ref<boolean>(loadFromStorage<boolean>(LS.unreadOnly, false))
+  const fontSize = ref<FontSize>(loadFromStorage<FontSize>(LS.fontSize, 'medium'))
 
   // ---------------------------------------------------------------------------
   // State: Device-local settings (localStorage only, never synced to DB)
@@ -95,6 +98,7 @@ export const useUIStore = defineStore('ui', () => {
       notify_new_entries: notifyNewEntries.value,
       notify_email: notifyEmail.value,
       show_unread_only: unreadOnly.value,
+      font_size: fontSize.value,
     }
   }
 
@@ -133,6 +137,7 @@ export const useUIStore = defineStore('ui', () => {
     { ref: notifyNewEntries, key: LS.notifyNewEntries },
     { ref: notifyEmail, key: LS.notifyEmail },
     { ref: unreadOnly, key: LS.unreadOnly },
+    { ref: fontSize, key: LS.fontSize },
   ] as const
 
   for (const { ref: settingRef, key } of syncedRefs) {
@@ -155,6 +160,20 @@ export const useUIStore = defineStore('ui', () => {
       root.classList.add(`theme-${val}`)
       const isDark = val === 'dark' || val === 'midnight' || val === 'forest'
       root.style.colorScheme = isDark ? 'dark' : 'light'
+    },
+    { immediate: true },
+  )
+
+  // Apply font size to the document root whenever it changes
+  const fontSizeMap: Record<FontSize, string> = {
+    small: '14px',
+    medium: '16px',
+    large: '18px',
+  }
+  watch(
+    fontSize,
+    (val) => {
+      document.documentElement.style.fontSize = fontSizeMap[val]
     },
     { immediate: true },
   )
@@ -192,6 +211,7 @@ export const useUIStore = defineStore('ui', () => {
       notifyNewEntries.value = data.notify_new_entries ?? false
       notifyEmail.value = data.notify_email ?? false
       unreadOnly.value = data.show_unread_only ?? false
+      fontSize.value = (data.font_size as FontSize) || 'medium'
 
       settingsLoaded.value = true
       _dbSyncEnabled = true
@@ -252,6 +272,10 @@ export const useUIStore = defineStore('ui', () => {
     searchOpen.value = !searchOpen.value
   }
 
+  function setFontSize(size: FontSize): void {
+    fontSize.value = size
+  }
+
   function setUnreadOnly(val: boolean): void {
     unreadOnly.value = val
   }
@@ -273,6 +297,7 @@ export const useUIStore = defineStore('ui', () => {
     notifyNewEntries,
     notifyEmail,
     unreadOnly,
+    fontSize,
     // Device-local settings
     sidebarOpen,
     listWidth,
@@ -294,6 +319,7 @@ export const useUIStore = defineStore('ui', () => {
     setEntriesPerPage,
     openReader,
     closeReader,
+    setFontSize,
     setUnreadOnly,
     toggleSearch,
     toggleShortcutsDialog,

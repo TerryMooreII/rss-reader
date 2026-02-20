@@ -74,6 +74,12 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;')
 }
 
+const fontSizes = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' },
+]
+
 const themes = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
@@ -141,6 +147,25 @@ const shortcuts = [
               @click="ui.setTheme(t.value as any)"
             >
               {{ t.label }}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-text-secondary mb-2">Font Size</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              v-for="fs in fontSizes"
+              :key="fs.value"
+              class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+              :class="
+                ui.fontSize === fs.value
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'hover:bg-bg-hover text-text-secondary'
+              "
+              @click="ui.setFontSize(fs.value as any)"
+            >
+              {{ fs.label }}
             </button>
           </div>
         </div>
