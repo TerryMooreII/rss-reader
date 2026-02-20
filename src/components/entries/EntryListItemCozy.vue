@@ -30,7 +30,11 @@ const timeAgo = computed(() => {
 const isRead = computed(() => !!props.entry.read_at)
 
 const excerpt = computed(() => {
-  const text = props.entry.summary || props.entry.content_text || ''
+  let text = props.entry.summary || props.entry.content_text || ''
+  if (text && (text.includes('<') || text.includes('&lt;'))) {
+    const doc = new DOMParser().parseFromString(text, 'text/html')
+    text = doc.body.textContent?.trim() || ''
+  }
   return text.length > 150 ? text.slice(0, 150) + '...' : text
 })
 </script>

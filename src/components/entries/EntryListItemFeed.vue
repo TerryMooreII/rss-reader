@@ -58,6 +58,10 @@ const media = computed(() => {
 
 const excerpt = computed(() => {
   let text = props.entry.summary || props.entry.content_text || ''
+  if (text && (text.includes('<') || text.includes('&lt;'))) {
+    const doc = new DOMParser().parseFromString(text, 'text/html')
+    text = doc.body.textContent?.trim() || ''
+  }
   if (!text && props.entry.content_html) {
     const doc = new DOMParser().parseFromString(props.entry.content_html, 'text/html')
     text = doc.body.textContent?.trim() || ''
