@@ -21,7 +21,9 @@ const markReadLabel = computed(() => {
 })
 
 function toggleUnreadFilter() {
-  const newFilter = { ...entryStore.filter, unreadOnly: !entryStore.filter.unreadOnly }
+  const newVal = !ui.unreadOnly
+  ui.setUnreadOnly(newVal)
+  const newFilter = { ...entryStore.filter, unreadOnly: newVal }
   entryStore.fetchEntries(newFilter)
 }
 
@@ -56,24 +58,24 @@ function cycleDisplayMode() {
           <button
             class="rounded-md px-2.5 py-1 font-medium transition-colors"
             :class="
-              entryStore.filter.unreadOnly
+              ui.unreadOnly
                 ? 'bg-bg-primary text-text-primary shadow-sm'
                 : 'text-text-secondary'
             "
-            :aria-pressed="entryStore.filter.unreadOnly"
-            @click="!entryStore.filter.unreadOnly && toggleUnreadFilter()"
+            :aria-pressed="ui.unreadOnly"
+            @click="!ui.unreadOnly && toggleUnreadFilter()"
           >
             Unread
           </button>
           <button
             class="rounded-md px-2.5 py-1 font-medium transition-colors"
             :class="
-              !entryStore.filter.unreadOnly
+              !ui.unreadOnly
                 ? 'bg-bg-primary text-text-primary shadow-sm'
                 : 'text-text-secondary'
             "
-            :aria-pressed="!entryStore.filter.unreadOnly"
-            @click="entryStore.filter.unreadOnly && toggleUnreadFilter()"
+            :aria-pressed="!ui.unreadOnly"
+            @click="ui.unreadOnly && toggleUnreadFilter()"
           >
             All
           </button>
@@ -110,24 +112,24 @@ function cycleDisplayMode() {
         <button
           class="rounded-md px-2.5 py-1 font-medium transition-colors"
           :class="
-            entryStore.filter.unreadOnly
+            ui.unreadOnly
               ? 'bg-bg-primary text-text-primary shadow-sm'
               : 'text-text-secondary'
           "
-          :aria-pressed="entryStore.filter.unreadOnly"
-          @click="!entryStore.filter.unreadOnly && toggleUnreadFilter()"
+          :aria-pressed="ui.unreadOnly"
+          @click="!ui.unreadOnly && toggleUnreadFilter()"
         >
           Unread
         </button>
         <button
           class="rounded-md px-2.5 py-1 font-medium transition-colors"
           :class="
-            !entryStore.filter.unreadOnly
+            !ui.unreadOnly
               ? 'bg-bg-primary text-text-primary shadow-sm'
               : 'text-text-secondary'
           "
-          :aria-pressed="!entryStore.filter.unreadOnly"
-          @click="entryStore.filter.unreadOnly && toggleUnreadFilter()"
+          :aria-pressed="!ui.unreadOnly"
+          @click="ui.unreadOnly && toggleUnreadFilter()"
         >
           All
         </button>

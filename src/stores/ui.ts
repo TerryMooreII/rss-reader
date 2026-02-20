@@ -23,6 +23,7 @@ const LS = {
   defaultSortOrder: 'acta:defaultSortOrder',
   notifyNewEntries: 'acta:notifyNewEntries',
   notifyEmail: 'acta:notifyEmail',
+  unreadOnly: 'acta:unreadOnly',
 } as const
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -55,6 +56,7 @@ export const useUIStore = defineStore('ui', () => {
   )
   const notifyNewEntries = ref<boolean>(loadFromStorage<boolean>(LS.notifyNewEntries, false))
   const notifyEmail = ref<boolean>(loadFromStorage<boolean>(LS.notifyEmail, false))
+  const unreadOnly = ref<boolean>(loadFromStorage<boolean>(LS.unreadOnly, false))
 
   // ---------------------------------------------------------------------------
   // State: Device-local settings (localStorage only, never synced to DB)
@@ -92,6 +94,7 @@ export const useUIStore = defineStore('ui', () => {
       default_sort_order: defaultSortOrder.value,
       notify_new_entries: notifyNewEntries.value,
       notify_email: notifyEmail.value,
+      show_unread_only: unreadOnly.value,
     }
   }
 
@@ -129,6 +132,7 @@ export const useUIStore = defineStore('ui', () => {
     { ref: defaultSortOrder, key: LS.defaultSortOrder },
     { ref: notifyNewEntries, key: LS.notifyNewEntries },
     { ref: notifyEmail, key: LS.notifyEmail },
+    { ref: unreadOnly, key: LS.unreadOnly },
   ] as const
 
   for (const { ref: settingRef, key } of syncedRefs) {
@@ -187,6 +191,7 @@ export const useUIStore = defineStore('ui', () => {
       defaultSortOrder.value = (data.default_sort_order as SortOrder) || 'newest_first'
       notifyNewEntries.value = data.notify_new_entries ?? false
       notifyEmail.value = data.notify_email ?? false
+      unreadOnly.value = data.show_unread_only ?? false
 
       settingsLoaded.value = true
       _dbSyncEnabled = true
@@ -247,6 +252,10 @@ export const useUIStore = defineStore('ui', () => {
     searchOpen.value = !searchOpen.value
   }
 
+  function setUnreadOnly(val: boolean): void {
+    unreadOnly.value = val
+  }
+
   function toggleShortcutsDialog(): void {
     shortcutsDialogOpen.value = !shortcutsDialogOpen.value
   }
@@ -263,6 +272,7 @@ export const useUIStore = defineStore('ui', () => {
     defaultSortOrder,
     notifyNewEntries,
     notifyEmail,
+    unreadOnly,
     // Device-local settings
     sidebarOpen,
     listWidth,
@@ -284,6 +294,7 @@ export const useUIStore = defineStore('ui', () => {
     setEntriesPerPage,
     openReader,
     closeReader,
+    setUnreadOnly,
     toggleSearch,
     toggleShortcutsDialog,
   }
