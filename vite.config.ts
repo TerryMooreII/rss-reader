@@ -22,8 +22,8 @@ export default defineConfig({
         theme_color: '#3b82f6',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/app/all',
-        scope: '/',
+        start_url: '/rss-reader/app/all',
+        scope: '/rss-reader/',
         icons: [
           {
             src: 'pwa-192x192.png',
