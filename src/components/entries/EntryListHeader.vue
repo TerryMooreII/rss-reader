@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
-import { CheckIcon, Bars3BottomLeftIcon, Squares2X2Icon, Bars3Icon, NewspaperIcon } from '@heroicons/vue/24/outline'
+import { CheckIcon, Bars3BottomLeftIcon, Squares2X2Icon, Bars3Icon, NewspaperIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps<{
   title: string
@@ -83,12 +83,14 @@ function cycleDisplayMode() {
 
         <!-- Mark all read -->
         <button
-          class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-text-muted hover:bg-bg-hover hover:text-text-primary"
+          class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-text-muted hover:bg-bg-hover hover:text-text-primary disabled:opacity-50 disabled:pointer-events-none"
           :aria-label="markReadLabel"
+          :disabled="entryStore.markingAllRead"
           @click="entryStore.markAllRead()"
         >
-          <CheckIcon class="h-4 w-4" />
-          <span>{{ markReadLabel }}</span>
+          <ArrowPathIcon v-if="entryStore.markingAllRead" class="h-4 w-4 animate-spin" />
+          <CheckIcon v-else class="h-4 w-4" />
+          <span>{{ entryStore.markingAllRead ? 'Marking…' : markReadLabel }}</span>
         </button>
 
         <!-- Display mode toggle -->
@@ -138,12 +140,14 @@ function cycleDisplayMode() {
       <div class="flex items-center gap-1">
         <!-- Mark all read -->
         <button
-          class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-text-muted hover:bg-bg-hover hover:text-text-primary"
+          class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-text-muted hover:bg-bg-hover hover:text-text-primary disabled:opacity-50 disabled:pointer-events-none"
           :aria-label="markReadLabel"
+          :disabled="entryStore.markingAllRead"
           @click="entryStore.markAllRead()"
         >
-          <CheckIcon class="h-4 w-4" />
-          <span>{{ markReadLabel }}</span>
+          <ArrowPathIcon v-if="entryStore.markingAllRead" class="h-4 w-4 animate-spin" />
+          <CheckIcon v-else class="h-4 w-4" />
+          <span>{{ entryStore.markingAllRead ? 'Marking…' : markReadLabel }}</span>
         </button>
 
         <!-- Display mode toggle -->

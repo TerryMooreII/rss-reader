@@ -25,6 +25,7 @@ export const useEntryStore = defineStore('entries', () => {
   const hasMore = ref(false)
   const filter = ref<EntryFilter>({ type: 'all', unreadOnly: false })
   const error = ref<string | null>(null)
+  const markingAllRead = ref(false)
 
   // For search offset-based pagination
   let searchOffset = 0
@@ -358,6 +359,7 @@ export const useEntryStore = defineStore('entries', () => {
 
   async function markAllRead(): Promise<void> {
     error.value = null
+    markingAllRead.value = true
 
     try {
       const userId = _getUserId()
@@ -398,9 +400,14 @@ export const useEntryStore = defineStore('entries', () => {
           entry.read_at = now
         }
       }
+
+      // Re-fetch the current view to reflect server state
+      await fetchEntries(filter.value)
     } catch (err: unknown) {
       error.value =
         err instanceof Error ? err.message : 'Failed to mark all entries as read'
+    } finally {
+      markingAllRead.value = false
     }
   }
 
@@ -597,6 +604,7 @@ export const useEntryStore = defineStore('entries', () => {
     hasMore,
     filter,
     error,
+    markingAllRead,
     currentPage,
     // Getters
     selectedEntry,
