@@ -8,13 +8,14 @@ import { RssIcon } from '@heroicons/vue/24/outline'
 import {
   StarIcon as StarOutline,
   ArrowTopRightOnSquareIcon,
-  LinkIcon,
   EyeIcon,
   EyeSlashIcon,
   ChevronUpIcon,
 } from '@heroicons/vue/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/vue/24/solid'
 import MediaEmbed from '@/components/reader/MediaEmbed.vue'
+import ShareMenu from '@/components/common/ShareMenu.vue'
+import SharePanel from '@/components/common/SharePanel.vue'
 import { detectMedia } from '@/utils/mediaDetect'
 
 const props = defineProps<{
@@ -32,6 +33,7 @@ const ui = useUIStore()
 let markReadTimer: ReturnType<typeof setTimeout> | null = null
 
 const faviconError = ref(false)
+const shareOpen = ref(false)
 
 const isRead = computed(() => !!props.entry.read_at)
 const isStarred = computed(() => !!props.entry.starred_at)
@@ -101,6 +103,7 @@ watch(() => props.expanded, (val) => {
     clearTimeout(markReadTimer)
     markReadTimer = null
   }
+  if (!val) shareOpen.value = false
 })
 
 onUnmounted(() => {
@@ -126,11 +129,6 @@ function openExternal(e: Event) {
       window.location.href = props.entry.url
     }
   }
-}
-
-function copyLink(e: Event) {
-  e.stopPropagation()
-  if (props.entry.url) navigator.clipboard.writeText(props.entry.url)
 }
 
 function collapse(e: Event) {
@@ -264,14 +262,12 @@ function collapse(e: Event) {
           <span class="hidden md:inline">Open</span>
         </button>
 
-        <button
-          class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
-          aria-label="Copy link to clipboard"
-          @click="copyLink"
-        >
-          <LinkIcon class="h-4 w-4" />
-          <span class="hidden md:inline">Share</span>
-        </button>
+        <ShareMenu
+          v-if="entry.url"
+          v-model:open="shareOpen"
+          :url="entry.url"
+          :title="entry.title || 'Untitled'"
+        />
 
         <!-- Collapse button (when expanded) -->
         <button
@@ -284,6 +280,13 @@ function collapse(e: Event) {
           <span class="hidden md:inline">Collapse</span>
         </button>
       </div>
+
+      <!-- Share panel (inline, expands the card) -->
+      <SharePanel
+        v-if="shareOpen && entry.url"
+        :url="entry.url"
+        :title="entry.title || 'Untitled'"
+      />
     </div>
   </article>
 </template>

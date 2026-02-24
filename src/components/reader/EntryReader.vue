@@ -6,12 +6,13 @@ import { sanitizeHtml, cleanAuthor } from '@/utils/sanitize'
 import {
   ArrowTopRightOnSquareIcon,
   StarIcon as StarOutline,
-  ShareIcon,
   XMarkIcon,
   RssIcon,
 } from '@heroicons/vue/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/vue/24/solid'
 import MediaEmbed from './MediaEmbed.vue'
+import ShareMenu from '@/components/common/ShareMenu.vue'
+import SharePanel from '@/components/common/SharePanel.vue'
 import { detectMedia } from '@/utils/mediaDetect'
 
 const entryStore = useEntryStore()
@@ -21,7 +22,8 @@ const entry = computed(() => entryStore.selectedEntry)
 const readerEl = ref<HTMLElement | null>(null)
 
 const faviconError = ref(false)
-watch(() => entry.value?.id, () => { faviconError.value = false })
+const shareOpen = ref(false)
+watch(() => entry.value?.id, () => { faviconError.value = false; shareOpen.value = false })
 
 // Focus the reader panel when a new entry is selected
 watch(
@@ -90,11 +92,6 @@ function openExternal() {
   }
 }
 
-function shareLink() {
-  if (entry.value?.url) {
-    navigator.clipboard.writeText(entry.value.url)
-  }
-}
 </script>
 
 <template>
@@ -123,10 +120,13 @@ function shareLink() {
           <StarOutline v-else class="h-4 w-4" />
           <span class="hidden md:inline">{{ isStarred ? 'Starred' : 'Star' }}</span>
         </button>
-        <button class="btn-ghost text-xs gap-1" aria-label="Copy link to clipboard" @click="shareLink">
-          <ShareIcon class="h-4 w-4" />
-          <span class="hidden md:inline">Share</span>
-        </button>
+        <ShareMenu
+          v-if="entry.url"
+          v-model:open="shareOpen"
+          :url="entry.url"
+          :title="entry.title || 'Untitled'"
+          compact
+        />
       </div>
       <div class="flex items-center gap-2">
         <button class="btn-ghost text-xs gap-1" aria-label="Close reader" @click="entryStore.selectEntry(null)">
@@ -135,6 +135,14 @@ function shareLink() {
         </button>
       </div>
     </div>
+
+    <!-- Share panel (inline, expands below toolbar) -->
+    <SharePanel
+      v-if="shareOpen && entry.url"
+      class="mx-4 my-2 shrink-0"
+      :url="entry.url"
+      :title="entry.title || 'Untitled'"
+    />
 
     <!-- Article content -->
     <div class="flex-1 overflow-y-auto px-4 py-6 pb-10 md:px-10 md:py-8 md:pb-8">
