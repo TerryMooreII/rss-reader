@@ -2,7 +2,7 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
-import { sanitizeHtml } from '@/utils/sanitize'
+import { sanitizeHtml, cleanAuthor } from '@/utils/sanitize'
 import {
   ArrowTopRightOnSquareIcon,
   StarIcon as StarOutline,
@@ -150,7 +150,7 @@ function shareLink() {
           />
           <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" />
           <span class="font-medium text-accent">{{ entry.feed_title }}</span>
-          <span v-if="entry.author">&middot; {{ entry.author }}</span>
+          <span v-if="entry.author">&middot; {{ cleanAuthor(entry.author) }}</span>
         </div>
 
         <!-- Title -->

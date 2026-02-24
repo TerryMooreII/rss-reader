@@ -65,3 +65,11 @@ const SANITIZE_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
 export function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, SANITIZE_CONFIG) as string
 }
+
+/**
+ * Strip XML/HTML tags from author names.
+ * e.g. `<author id="817">Sportsnet Video` → `Sportsnet Video`
+ */
+export function cleanAuthor(author: string): string {
+  return author.replace(/<[^>]*>/g, '').trim()
+}

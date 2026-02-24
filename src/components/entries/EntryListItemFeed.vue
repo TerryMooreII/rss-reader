@@ -3,7 +3,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import type { Entry } from '@/types/models'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
-import { sanitizeHtml } from '@/utils/sanitize'
+import { sanitizeHtml, cleanAuthor } from '@/utils/sanitize'
 import { RssIcon } from '@heroicons/vue/24/outline'
 import {
   StarIcon as StarOutline,
@@ -162,31 +162,29 @@ function collapse(e: Event) {
         />
         <RssIcon v-else class="h-5 w-5 shrink-0 text-text-muted" />
         <span class="text-sm font-medium text-text-primary truncate">{{ entry.feed_title }}</span>
-        <span v-if="entry.author" class="text-xs text-text-muted truncate">&middot; {{ entry.author }}</span>
+        <span v-if="entry.author" class="text-xs text-text-muted truncate">&middot; {{ cleanAuthor(entry.author) }}</span>
         <span class="ml-auto text-xs text-text-muted whitespace-nowrap">{{ timeAgo }}</span>
       </div>
 
-      <!-- Collapsed: title + summary + thumbnail side by side -->
-      <div v-if="!expanded" class="flex gap-3">
-        <div class="flex-1 min-w-0">
-          <h3
-            class="text-base leading-snug mb-1"
-            :class="isRead ? 'text-text-muted' : 'text-text-primary font-semibold'"
-          >
-            {{ entry.title || 'Untitled' }}
-          </h3>
-          <p v-if="excerpt" class="text-sm text-text-secondary leading-relaxed line-clamp-4">
-            {{ excerpt }}
-          </p>
-        </div>
+      <!-- Collapsed: title + summary with thumbnail float -->
+      <div v-if="!expanded">
         <img
           v-if="entry.image_url"
           :src="entry.image_url"
           :alt="entry.title || ''"
-          class="h-24 w-32 shrink-0 rounded-lg object-cover self-start mt-0.5"
+          class="h-24 w-32 rounded-lg object-cover float-right ml-3 mb-1"
           loading="lazy"
           @error="($event.target as HTMLImageElement).style.display = 'none'"
         />
+        <h3
+          class="text-base leading-snug mb-1"
+          :class="isRead ? 'text-text-muted' : 'text-text-primary font-semibold'"
+        >
+          {{ entry.title || 'Untitled' }}
+        </h3>
+        <p v-if="excerpt" class="text-sm text-text-secondary leading-relaxed line-clamp-4">
+          {{ excerpt }}
+        </p>
       </div>
 
       <!-- Expanded: full content -->
