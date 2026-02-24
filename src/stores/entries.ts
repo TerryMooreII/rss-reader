@@ -1,17 +1,23 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
-import type { Entry, EntryFilter } from '@/types/models'
+import type { Entry, EntryFilter, ContentFilter } from '@/types/models'
 import { useFeedStore } from './feeds'
 import { useGroupStore } from './groups'
 import { useAuthStore } from './auth'
 import { useUIStore } from './ui'
+import { useFilterStore } from './filters'
 
 const _ta = document.createElement('textarea')
 function decodeHtml(s: string | null | undefined): string | null {
   if (!s) return s as null
   _ta.innerHTML = s
   return _ta.value
+}
+
+function stripHtml(s: string | null | undefined): string {
+  if (!s) return ''
+  return s.replace(/<[^>]*>/g, ' ')
 }
 
 export const useEntryStore = defineStore('entries', () => {
@@ -42,14 +48,50 @@ export const useEntryStore = defineStore('entries', () => {
   // Getters
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Filter helpers
+  // ---------------------------------------------------------------------------
+
+  function _entryMatchesKeyword(rule: ContentFilter, entry: Entry): boolean {
+    if (rule.scope_type === 'feed' && rule.scope_id !== entry.feed_id) return false
+    if (rule.scope_type === 'group') {
+      const groupStore = useGroupStore()
+      const groupFeedIds = groupStore.feedsByGroup(rule.scope_id!)
+      if (!groupFeedIds.includes(entry.feed_id)) return false
+    }
+
+    const kw = rule.keyword.toLowerCase()
+    const title = (entry.title ?? '').toLowerCase()
+    const content = stripHtml(entry.content_html).toLowerCase()
+
+    return title.includes(kw) || content.includes(kw)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Getters
+  // ---------------------------------------------------------------------------
+
+  const filteredEntries = computed(() => {
+    const filterStore = useFilterStore()
+    const hideRules = filterStore.enabledFilters.filter((f) => f.action === 'hide')
+
+    if (hideRules.length === 0) return entries.value
+
+    return entries.value.filter((entry) => {
+      // Never hide starred entries
+      if (entry.starred_at) return true
+      return !hideRules.some((rule) => _entryMatchesKeyword(rule, entry))
+    })
+  })
+
   const selectedEntry = computed(() => {
     if (!selectedEntryId.value) return null
-    return entries.value.find((e) => e.id === selectedEntryId.value) ?? null
+    return filteredEntries.value.find((e) => e.id === selectedEntryId.value) ?? null
   })
 
   const selectedIndex = computed(() => {
     if (!selectedEntryId.value) return -1
-    return entries.value.findIndex((e) => e.id === selectedEntryId.value)
+    return filteredEntries.value.findIndex((e) => e.id === selectedEntryId.value)
   })
 
   const hasPrevious = computed(() => currentPage.value > 1)
@@ -152,6 +194,19 @@ export const useEntryStore = defineStore('entries', () => {
   // Actions
   // ---------------------------------------------------------------------------
 
+  function _autoMarkReadFiltered(): void {
+    const filterStore = useFilterStore()
+    const markReadRules = filterStore.enabledFilters.filter((f) => f.action === 'mark_read')
+    if (markReadRules.length === 0) return
+
+    for (const entry of entries.value) {
+      if (entry.read_at) continue
+      if (markReadRules.some((rule) => _entryMatchesKeyword(rule, entry))) {
+        markRead(entry.id)
+      }
+    }
+  }
+
   async function fetchEntries(newFilter: EntryFilter): Promise<void> {
     const ui = useUIStore()
     loading.value = true
@@ -171,6 +226,7 @@ export const useEntryStore = defineStore('entries', () => {
       if (newFilter.type === 'search') {
         searchOffset = rows.length
       }
+      _autoMarkReadFiltered()
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch entries'
     } finally {
@@ -207,6 +263,7 @@ export const useEntryStore = defineStore('entries', () => {
       if (filter.value.type === 'search') {
         searchOffset += rows.length
       }
+      _autoMarkReadFiltered()
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to load more entries'
     } finally {
@@ -576,22 +633,22 @@ export const useEntryStore = defineStore('entries', () => {
   }
 
   function selectNext(): void {
-    if (entries.value.length === 0) return
+    if (filteredEntries.value.length === 0) return
 
     const currentIndex = selectedIndex.value
     if (currentIndex < 0) {
-      selectEntry(entries.value[0]!.id)
-    } else if (currentIndex < entries.value.length - 1) {
-      selectEntry(entries.value[currentIndex + 1]!.id)
+      selectEntry(filteredEntries.value[0]!.id)
+    } else if (currentIndex < filteredEntries.value.length - 1) {
+      selectEntry(filteredEntries.value[currentIndex + 1]!.id)
     }
   }
 
   function selectPrevious(): void {
-    if (entries.value.length === 0) return
+    if (filteredEntries.value.length === 0) return
 
     const currentIndex = selectedIndex.value
     if (currentIndex > 0) {
-      selectEntry(entries.value[currentIndex - 1]!.id)
+      selectEntry(filteredEntries.value[currentIndex - 1]!.id)
     }
   }
 
@@ -607,6 +664,7 @@ export const useEntryStore = defineStore('entries', () => {
     markingAllRead,
     currentPage,
     // Getters
+    filteredEntries,
     selectedEntry,
     selectedIndex,
     hasPrevious,

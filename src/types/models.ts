@@ -123,6 +123,18 @@ export interface DiscoverFeed {
   subscriber_count: number
 }
 
+export interface ContentFilter {
+  id: string
+  user_id: string
+  keyword: string
+  scope_type: 'global' | 'feed' | 'group'
+  scope_id: string | null
+  action: 'hide' | 'mark_read'
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface Toast {
   id: string
   type: 'success' | 'error' | 'info' | 'warning'

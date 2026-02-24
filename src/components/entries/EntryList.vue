@@ -64,7 +64,7 @@ onUnmounted(() => {
 
 // Re-observe when entries change (sentinel might have moved)
 watch(
-  () => entryStore.entries.length,
+  () => entryStore.filteredEntries.length,
   () => {
     if (!isPaginated.value && sentinel.value && observer) {
       observer.disconnect()
@@ -107,7 +107,7 @@ watch(() => entryStore.filter, () => {
   <div ref="scrollContainer" class="flex-1 overflow-y-auto pb-16 md:pb-0">
     <!-- Empty state -->
     <div
-      v-if="!entryStore.loading && entryStore.entries.length === 0"
+      v-if="!entryStore.loading && entryStore.filteredEntries.length === 0"
       class="flex flex-col items-center justify-center py-20 text-center"
     >
       <p class="text-lg font-medium text-text-secondary">No entries found</p>
@@ -173,14 +173,14 @@ watch(() => entryStore.filter, () => {
     <div
       v-else
       role="feed"
-      :aria-label="`Article entries, ${entryStore.entries.length} items`"
+      :aria-label="`Article entries, ${entryStore.filteredEntries.length} items`"
       :aria-busy="entryStore.loadingMore"
       :class="isFeedMode ? 'mx-auto max-w-2xl' : ''"
     >
       <!-- Feed mode -->
       <template v-if="isFeedMode">
         <EntryListItemFeed
-          v-for="entry in entryStore.entries"
+          v-for="entry in entryStore.filteredEntries"
           :key="entry.id"
           :entry="entry"
           :expanded="entry.id === expandedEntryId"
@@ -194,7 +194,7 @@ watch(() => entryStore.filter, () => {
       <template v-else>
         <component
           :is="component"
-          v-for="entry in entryStore.entries"
+          v-for="entry in entryStore.filteredEntries"
           :key="entry.id"
           :entry="entry"
           :selected="entry.id === entryStore.selectedEntryId"
@@ -221,7 +221,7 @@ watch(() => entryStore.filter, () => {
 
     <!-- Pagination controls -->
     <div
-      v-if="isPaginated && !entryStore.loading && entryStore.entries.length > 0"
+      v-if="isPaginated && !entryStore.loading && entryStore.filteredEntries.length > 0"
       class="flex items-center justify-between border-t border-border px-4 py-3"
       :class="isFeedMode ? 'mx-auto max-w-2xl' : ''"
     >

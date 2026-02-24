@@ -6,6 +6,7 @@ import { useUIStore } from '@/stores/ui'
 import { useNotificationStore } from '@/stores/notifications'
 import { supabase } from '@/config/supabase'
 import GroupsSettingsTab from '@/components/settings/GroupsSettingsTab.vue'
+import FiltersSettingsTab from '@/components/settings/FiltersSettingsTab.vue'
 
 const authStore = useAuthStore()
 const ui = useUIStore()
@@ -18,8 +19,9 @@ const tabs = [
   { id: 'account', label: 'Account' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'groups', label: 'Groups' },
+  { id: 'filters', label: 'Filters' },
   { id: 'import-export', label: 'Import / Export' },
-  { id: 'keyboard', label: 'Keyboard Shortcuts' },
+  { id: 'keyboard', label: 'Keyboard' },
 ]
 
 async function handleExportOPML() {
@@ -318,6 +320,9 @@ const shortcuts = [
 
       <!-- Groups -->
       <GroupsSettingsTab v-if="activeTab === 'groups'" />
+
+      <!-- Filters -->
+      <FiltersSettingsTab v-if="activeTab === 'filters'" />
 
       <!-- Import/Export -->
       <div v-if="activeTab === 'import-export'" class="space-y-6">

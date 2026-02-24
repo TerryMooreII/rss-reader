@@ -6,6 +6,7 @@ import { useFeedStore } from '@/stores/feeds'
 import { useEntryStore } from '@/stores/entries'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupStore } from '@/stores/groups'
+import { useFilterStore } from '@/stores/filters'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useSwipe } from '@/composables/useSwipe'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
@@ -17,6 +18,7 @@ const feedStore = useFeedStore()
 const entryStore = useEntryStore()
 const authStore = useAuthStore()
 const groupStore = useGroupStore()
+const filterStore = useFilterStore()
 
 const isMobile = ref(window.innerWidth < 768)
 const sidebarRef = ref<InstanceType<typeof AppSidebar> | null>(null)
@@ -112,6 +114,7 @@ onMounted(async () => {
   await Promise.all([
     feedStore.fetchFeeds(),
     groupStore.fetchGroups(),
+    filterStore.fetchFilters(),
     ui.loadSettingsFromDB(authStore.user!.id),
   ])
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -203,6 +206,7 @@ async function refetchAllData() {
     await Promise.all([
       feedStore.fetchFeeds(),
       groupStore.fetchGroups(),
+      filterStore.fetchFilters(),
       entryStore.silentRefresh(),
     ])
   } catch {
