@@ -166,8 +166,8 @@ function collapse(e: Event) {
         <span class="ml-auto text-xs text-text-muted whitespace-nowrap">{{ timeAgo }}</span>
       </div>
 
-      <!-- Collapsed: title + summary with thumbnail float -->
-      <div v-if="!expanded">
+      <!-- Collapsed: title + summary with thumbnail wrap -->
+      <div v-if="!expanded" class="overflow-hidden max-h-40">
         <img
           v-if="entry.image_url"
           :src="entry.image_url"
@@ -182,7 +182,7 @@ function collapse(e: Event) {
         >
           {{ entry.title || 'Untitled' }}
         </h3>
-        <p v-if="excerpt" class="text-sm text-text-secondary leading-relaxed line-clamp-4">
+        <p v-if="excerpt" class="text-sm text-text-secondary leading-relaxed">
           {{ excerpt }}
         </p>
       </div>
