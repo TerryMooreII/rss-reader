@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
 import EntryListItem from './EntryListItem.vue'
 import EntryListItemCozy from './EntryListItemCozy.vue'
 import EntryListItemFeed from './EntryListItemFeed.vue'
 
+const router = useRouter()
 const entryStore = useEntryStore()
 const ui = useUIStore()
 
@@ -18,6 +20,7 @@ const expandedEntryId = ref<string | null>(null)
 
 const isFeedMode = computed(() => ui.displayMode === 'feed')
 const isPaginated = computed(() => ui.paginationMode === 'paginated')
+const isAllView = computed(() => entryStore.filter.type === 'all')
 
 const component = computed(() => {
   if (ui.displayMode === 'compact') return EntryListItem
@@ -80,6 +83,16 @@ async function goToPage(direction: 'next' | 'prev') {
   scrollContainer.value?.scrollTo({ top: 0 })
 }
 
+const refreshing = ref(false)
+async function handleRefresh() {
+  refreshing.value = true
+  try {
+    await entryStore.fetchEntries(entryStore.filter)
+  } finally {
+    refreshing.value = false
+  }
+}
+
 // Reset expanded entry when switching modes or filters
 watch(() => ui.displayMode, () => {
   expandedEntryId.value = null
@@ -98,12 +111,24 @@ watch(() => entryStore.filter, () => {
       class="flex flex-col items-center justify-center py-20 text-center"
     >
       <p class="text-lg font-medium text-text-secondary">No entries found</p>
-      <p class="mt-1 text-sm text-text-muted">
-        {{
-          entryStore.filter.unreadOnly
-            ? 'All caught up! Switch to "All" to see read entries.'
-            : 'Subscribe to feeds to start reading.'
-        }}
+      <p v-if="entryStore.filter.unreadOnly && isAllView" class="mt-1 text-sm text-text-muted">
+        All caught up!
+        <button
+          class="text-accent hover:underline"
+          :disabled="refreshing"
+          @click="handleRefresh"
+        >{{ refreshing ? 'Refreshing…' : 'Refresh' }}</button>
+        to check for new items or
+        <router-link :to="{ name: 'discover' }" class="text-accent hover:underline">Discover</router-link>
+        new feeds to subscribe to.
+      </p>
+      <p v-else-if="entryStore.filter.unreadOnly" class="mt-1 text-sm text-text-muted">
+        All caught up! Switch to
+        <router-link :to="{ name: 'all-entries' }" class="text-accent hover:underline">"All"</router-link>
+        to see read entries.
+      </p>
+      <p v-else class="mt-1 text-sm text-text-muted">
+        Subscribe to feeds to start reading.
       </p>
     </div>
 
