@@ -7,6 +7,7 @@ import { useNotificationStore } from '@/stores/notifications'
 import { supabase } from '@/config/supabase'
 import GroupsSettingsTab from '@/components/settings/GroupsSettingsTab.vue'
 import FiltersSettingsTab from '@/components/settings/FiltersSettingsTab.vue'
+import TagsSettingsTab from '@/components/settings/TagsSettingsTab.vue'
 
 const authStore = useAuthStore()
 const ui = useUIStore()
@@ -20,6 +21,7 @@ const tabs = [
   { id: 'notifications', label: 'Notifications' },
   { id: 'groups', label: 'Groups' },
   { id: 'filters', label: 'Filters' },
+  { id: 'tags', label: 'Tags' },
   { id: 'import-export', label: 'Import / Export' },
   { id: 'keyboard', label: 'Keyboard' },
 ]
@@ -116,11 +118,11 @@ const shortcuts = [
       </div>
 
       <!-- Tabs -->
-      <div class="flex gap-1 border-b mb-6 overflow-x-auto">
+      <div class="flex flex-wrap gap-1 border-b mb-6">
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          class="shrink-0 px-3 py-2 text-sm font-medium border-b-2 transition-colors"
+          class="px-3 py-2 text-sm font-medium border-b-2 transition-colors"
           :class="
             activeTab === tab.id
               ? 'border-accent text-accent'
@@ -323,6 +325,9 @@ const shortcuts = [
 
       <!-- Filters -->
       <FiltersSettingsTab v-if="activeTab === 'filters'" />
+
+      <!-- Tags -->
+      <TagsSettingsTab v-if="activeTab === 'tags'" />
 
       <!-- Import/Export -->
       <div v-if="activeTab === 'import-export'" class="space-y-6">

@@ -99,16 +99,18 @@ export interface Entry {
   created_at: string
   read_at: string | null
   starred_at: string | null
+  star_tag_id: string | null
   feed_title?: string | null
   feed_favicon_url?: string | null
 }
 
 export interface EntryFilter {
-  type: 'all' | 'starred' | 'feed' | 'group' | 'category' | 'search'
+  type: 'all' | 'starred' | 'feed' | 'group' | 'category' | 'search' | 'star_tag'
   feedId?: string
   groupId?: string
   category?: string
   query?: string
+  starTagId?: string
   unreadOnly: boolean
 }
 
@@ -129,10 +131,21 @@ export interface ContentFilter {
   keyword: string
   scope_type: 'global' | 'feed' | 'group'
   scope_id: string | null
-  action: 'hide' | 'mark_read'
+  action: 'hide' | 'mark_read' | 'auto_star'
+  star_tag_id: string | null
   enabled: boolean
   created_at: string
   updated_at: string
+}
+
+export interface StarTag {
+  id: string
+  user_id: string
+  name: string
+  position: number
+  created_at: string
+  updated_at: string
+  unread_count?: number
 }
 
 export interface Toast {

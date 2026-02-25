@@ -65,6 +65,12 @@ const router = createRouter({
           component: () => import('@/pages/StarredEntriesPage.vue'),
         },
         {
+          path: 'starred/tag/:starTagId',
+          name: 'star-tag-entries',
+          component: () => import('@/pages/StarTagEntriesPage.vue'),
+          props: true,
+        },
+        {
           path: 'feed/:feedId',
           name: 'feed-entries',
           component: () => import('@/pages/FeedEntriesPage.vue'),

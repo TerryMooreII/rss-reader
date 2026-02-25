@@ -19,6 +19,8 @@ import {
   CommandLineIcon,
   AdjustmentsHorizontalIcon,
   ArrowPathIcon,
+  FunnelIcon,
+  TagIcon,
 } from '@heroicons/vue/24/outline'
 
 const platforms = [
@@ -68,8 +70,8 @@ const features = [
   },
   {
     icon: StarIcon,
-    title: 'Star & Save',
-    desc: 'Star the articles that matter. Build your personal reading list. Come back to them whenever you\'re ready.',
+    title: 'Star & Organize',
+    desc: 'Star the articles that matter and organize them with custom tags. Build curated collections — "Read Later", "Research", whatever fits your workflow.',
   },
   {
     icon: BoltIcon,
@@ -85,6 +87,11 @@ const features = [
     icon: EyeIcon,
     title: 'Smart Read Tracking',
     desc: 'Mark-as-read on scroll, per-feed, per-group, or all at once. Acta tracks what you\'ve read so you never miss what\'s new.',
+  },
+  {
+    icon: FunnelIcon,
+    title: 'Content Filters',
+    desc: 'Set up rules to automatically hide, mark as read, or star-and-tag entries by keyword. Apply globally or scope to specific feeds and groups.',
   },
   {
     icon: ArrowDownTrayIcon,
@@ -312,6 +319,64 @@ const shortcuts = [
             <div class="border-t bg-[rgb(30,40,33)] p-3">
               <div class="text-sm font-semibold text-[rgb(220,230,222)]">Forest</div>
               <div class="text-xs text-[rgb(156,175,160)]">Nature-inspired</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Content Filters Showcase -->
+    <section class="border-t py-20">
+      <div class="mx-auto max-w-5xl px-4">
+        <div class="grid items-center gap-12 lg:grid-cols-2">
+          <div>
+            <h2 class="text-3xl font-bold text-text-primary sm:text-4xl">
+              Your feeds, your rules
+            </h2>
+            <p class="mt-4 text-text-secondary leading-relaxed">
+              Set up keyword-based rules that work for you. Automatically hide noise, mark routine
+              updates as read, or star and tag the stuff you care about — across all feeds or scoped
+              to specific ones.
+            </p>
+            <p class="mt-4 text-sm text-text-muted">
+              Combine filters with star tags to build a personal triage system that keeps your reading
+              list sharp and focused.
+            </p>
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex items-start gap-4 rounded-xl border bg-bg-secondary/50 p-5">
+              <div class="flex-shrink-0 rounded-lg bg-red-500/10 p-2.5">
+                <EyeIcon class="h-5 w-5 text-red-400" />
+              </div>
+              <div>
+                <h3 class="font-semibold text-text-primary">Hide</h3>
+                <p class="mt-1 text-sm text-text-secondary">
+                  Suppress entries matching a keyword so they never clutter your feed.
+                </p>
+              </div>
+            </div>
+            <div class="flex items-start gap-4 rounded-xl border bg-bg-secondary/50 p-5">
+              <div class="flex-shrink-0 rounded-lg bg-blue-500/10 p-2.5">
+                <ArrowPathIcon class="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <h3 class="font-semibold text-text-primary">Mark as Read</h3>
+                <p class="mt-1 text-sm text-text-secondary">
+                  Automatically mark routine updates as read so you can focus on what's new.
+                </p>
+              </div>
+            </div>
+            <div class="flex items-start gap-4 rounded-xl border bg-bg-secondary/50 p-5">
+              <div class="flex-shrink-0 rounded-lg bg-amber-500/10 p-2.5">
+                <TagIcon class="h-5 w-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 class="font-semibold text-text-primary">Auto Star & Tag</h3>
+                <p class="mt-1 text-sm text-text-secondary">
+                  Automatically star and tag matching entries into curated collections.
+                </p>
+              </div>
             </div>
           </div>
         </div>

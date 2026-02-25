@@ -44,7 +44,8 @@ export const useFilterStore = defineStore('filters', () => {
     keyword: string
     scope_type: 'global' | 'feed' | 'group'
     scope_id: string | null
-    action: 'hide' | 'mark_read'
+    action: 'hide' | 'mark_read' | 'auto_star'
+    star_tag_id?: string | null
   }): Promise<ContentFilter | null> {
     try {
       const authStore = useAuthStore()
@@ -56,6 +57,7 @@ export const useFilterStore = defineStore('filters', () => {
           scope_type: input.scope_type,
           scope_id: input.scope_id,
           action: input.action,
+          star_tag_id: input.star_tag_id ?? null,
         })
         .select()
         .single()
@@ -73,7 +75,7 @@ export const useFilterStore = defineStore('filters', () => {
 
   async function updateFilter(
     id: string,
-    updates: Partial<Pick<ContentFilter, 'keyword' | 'scope_type' | 'scope_id' | 'action' | 'enabled'>>,
+    updates: Partial<Pick<ContentFilter, 'keyword' | 'scope_type' | 'scope_id' | 'action' | 'enabled' | 'star_tag_id'>>,
   ): Promise<void> {
     try {
       const { error } = await supabase

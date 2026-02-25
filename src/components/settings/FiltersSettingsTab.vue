@@ -3,6 +3,7 @@ import { ref, nextTick } from 'vue'
 import { useFilterStore } from '@/stores/filters'
 import { useFeedStore } from '@/stores/feeds'
 import { useGroupStore } from '@/stores/groups'
+import { useStarTagStore } from '@/stores/starTags'
 import { useNotificationStore } from '@/stores/notifications'
 import type { ContentFilter } from '@/types/models'
 import {
@@ -16,18 +17,25 @@ import {
 const filterStore = useFilterStore()
 const feedStore = useFeedStore()
 const groupStore = useGroupStore()
+const starTagStore = useStarTagStore()
 const notifications = useNotificationStore()
 
 // --- Create form state ---
 const newKeyword = ref('')
 const newScopeValue = ref('global:null')
-const newAction = ref<'hide' | 'mark_read'>('hide')
+const newAction = ref<'hide' | 'mark_read' | 'auto_star'>('hide')
+const newStarTagId = ref<string | null>(null)
+const newTagName = ref('')
+const showNewTagInput = ref(false)
 
 // --- Edit state ---
 const editingFilterId = ref<string | null>(null)
 const editKeyword = ref('')
 const editScopeValue = ref('')
-const editAction = ref<'hide' | 'mark_read'>('hide')
+const editAction = ref<'hide' | 'mark_read' | 'auto_star'>('hide')
+const editStarTagId = ref<string | null>(null)
+const editNewTagName = ref('')
+const showEditNewTagInput = ref(false)
 const editInput = ref<HTMLInputElement | null>(null)
 
 // --- Delete confirm state ---
@@ -58,17 +66,48 @@ function scopeLabel(filter: ContentFilter): string {
   return 'Unknown'
 }
 
+// --- Tag helpers ---
+function tagName(tagId: string | null): string {
+  if (!tagId) return ''
+  return starTagStore.tagById(tagId)?.name ?? 'Unknown tag'
+}
+
+async function resolveNewStarTagId(): Promise<string | null> {
+  if (newAction.value !== 'auto_star') return null
+  if (showNewTagInput.value && newTagName.value.trim()) {
+    const tag = await starTagStore.createTag(newTagName.value.trim())
+    showNewTagInput.value = false
+    newTagName.value = ''
+    return tag?.id ?? null
+  }
+  return newStarTagId.value
+}
+
+async function resolveEditStarTagId(): Promise<string | null> {
+  if (editAction.value !== 'auto_star') return null
+  if (showEditNewTagInput.value && editNewTagName.value.trim()) {
+    const tag = await starTagStore.createTag(editNewTagName.value.trim())
+    showEditNewTagInput.value = false
+    editNewTagName.value = ''
+    return tag?.id ?? null
+  }
+  return editStarTagId.value
+}
+
 // --- Actions ---
 async function createFilter() {
   if (!newKeyword.value.trim()) return
+  if (newAction.value === 'auto_star' && !newStarTagId.value && !newTagName.value.trim()) return
 
   const { scope_type, scope_id } = parseScope(newScopeValue.value)
+  const starTagId = await resolveNewStarTagId()
 
   const result = await filterStore.createFilter({
     keyword: newKeyword.value.trim(),
     scope_type,
     scope_id,
     action: newAction.value,
+    star_tag_id: starTagId,
   })
 
   if (result) {
@@ -76,6 +115,9 @@ async function createFilter() {
     newKeyword.value = ''
     newScopeValue.value = 'global:null'
     newAction.value = 'hide'
+    newStarTagId.value = null
+    newTagName.value = ''
+    showNewTagInput.value = false
   } else {
     notifications.error('Failed to create filter')
   }
@@ -86,6 +128,9 @@ async function startEdit(filter: ContentFilter) {
   editKeyword.value = filter.keyword
   editScopeValue.value = toScopeValue(filter)
   editAction.value = filter.action
+  editStarTagId.value = filter.star_tag_id
+  showEditNewTagInput.value = false
+  editNewTagName.value = ''
   confirmingDeleteId.value = null
   await nextTick()
   editInput.value?.focus()
@@ -95,6 +140,9 @@ async function startEdit(filter: ContentFilter) {
 function cancelEdit() {
   editingFilterId.value = null
   editKeyword.value = ''
+  editStarTagId.value = null
+  showEditNewTagInput.value = false
+  editNewTagName.value = ''
 }
 
 async function saveEdit(id: string) {
@@ -104,12 +152,14 @@ async function saveEdit(id: string) {
   }
 
   const { scope_type, scope_id } = parseScope(editScopeValue.value)
+  const starTagId = await resolveEditStarTagId()
 
   await filterStore.updateFilter(id, {
     keyword: editKeyword.value.trim(),
     scope_type,
     scope_id,
     action: editAction.value,
+    star_tag_id: starTagId,
   })
   notifications.success('Filter updated')
   cancelEdit()
@@ -197,12 +247,63 @@ async function confirmDelete(id: string) {
           >
             Mark Read
           </button>
+          <button
+            class="px-3 py-2 text-sm font-medium transition-colors border-l border-border"
+            :class="
+              newAction === 'auto_star'
+                ? 'bg-star/10 text-star'
+                : 'bg-bg-primary text-text-secondary hover:bg-bg-hover'
+            "
+            @click="newAction = 'auto_star'"
+          >
+            Auto Star
+          </button>
         </div>
+      </div>
+
+      <!-- Tag selector for auto_star -->
+      <div v-if="newAction === 'auto_star'" class="flex gap-2 items-center">
+        <template v-if="!showNewTagInput">
+          <select
+            v-model="newStarTagId"
+            class="flex-1 rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option :value="null" disabled>Select a tag...</option>
+            <option
+              v-for="tag in starTagStore.sortedTags"
+              :key="tag.id"
+              :value="tag.id"
+            >
+              {{ tag.name }}
+            </option>
+          </select>
+          <button
+            class="rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover shrink-0"
+            @click="showNewTagInput = true"
+          >
+            New tag...
+          </button>
+        </template>
+        <template v-else>
+          <input
+            v-model="newTagName"
+            type="text"
+            placeholder="New tag name"
+            class="flex-1 rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            @keydown.escape="showNewTagInput = false; newTagName = ''"
+          />
+          <button
+            class="rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-muted hover:bg-bg-hover shrink-0"
+            @click="showNewTagInput = false; newTagName = ''"
+          >
+            Cancel
+          </button>
+        </template>
       </div>
 
       <button
         class="btn-primary flex items-center gap-1"
-        :disabled="!newKeyword.trim()"
+        :disabled="!newKeyword.trim() || (newAction === 'auto_star' && !newStarTagId && !newTagName.trim())"
         @click="createFilter"
       >
         <PlusIcon class="h-4 w-4" />
@@ -275,7 +376,57 @@ async function confirmDelete(id: string) {
               >
                 Mark Read
               </button>
+              <button
+                class="px-2 py-1 text-xs font-medium transition-colors border-l border-border"
+                :class="
+                  editAction === 'auto_star'
+                    ? 'bg-star/10 text-star'
+                    : 'bg-bg-primary text-text-secondary hover:bg-bg-hover'
+                "
+                @click="editAction = 'auto_star'"
+              >
+                Auto Star
+              </button>
             </div>
+          </div>
+          <!-- Tag selector for edit auto_star -->
+          <div v-if="editAction === 'auto_star'" class="flex gap-2 items-center">
+            <template v-if="!showEditNewTagInput">
+              <select
+                v-model="editStarTagId"
+                class="flex-1 rounded border border-border bg-bg-primary px-2 py-1 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option :value="null" disabled>Select a tag...</option>
+                <option
+                  v-for="tag in starTagStore.sortedTags"
+                  :key="tag.id"
+                  :value="tag.id"
+                >
+                  {{ tag.name }}
+                </option>
+              </select>
+              <button
+                class="rounded border border-border bg-bg-primary px-2 py-1 text-xs text-text-secondary hover:bg-bg-hover shrink-0"
+                @click="showEditNewTagInput = true"
+              >
+                New tag...
+              </button>
+            </template>
+            <template v-else>
+              <input
+                v-model="editNewTagName"
+                type="text"
+                placeholder="New tag name"
+                class="flex-1 rounded border border-border bg-bg-primary px-2 py-1 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                @keydown.escape="showEditNewTagInput = false; editNewTagName = ''"
+              />
+              <button
+                class="rounded border border-border bg-bg-primary px-2 py-1 text-xs text-text-muted hover:bg-bg-hover shrink-0"
+                @click="showEditNewTagInput = false; editNewTagName = ''"
+              >
+                Cancel
+              </button>
+            </template>
           </div>
           <div class="flex gap-1">
             <button
@@ -319,10 +470,18 @@ async function confirmDelete(id: string) {
                 :class="
                   filter.action === 'hide'
                     ? 'bg-danger/10 text-danger'
-                    : 'bg-accent/10 text-accent'
+                    : filter.action === 'auto_star'
+                      ? 'bg-star/10 text-star'
+                      : 'bg-accent/10 text-accent'
                 "
               >
-                {{ filter.action === 'hide' ? 'Hide' : 'Mark read' }}
+                {{ filter.action === 'hide' ? 'Hide' : filter.action === 'auto_star' ? 'Auto Star' : 'Mark read' }}
+              </span>
+              <span
+                v-if="filter.action === 'auto_star' && filter.star_tag_id"
+                class="rounded-full bg-star/10 px-2 py-0.5 text-xs font-medium text-star"
+              >
+                {{ tagName(filter.star_tag_id) }}
               </span>
             </div>
             <p class="text-xs text-text-muted mt-0.5 truncate">

@@ -13,6 +13,7 @@ import { StarIcon as StarSolid } from '@heroicons/vue/24/solid'
 import MediaEmbed from './MediaEmbed.vue'
 import ShareMenu from '@/components/common/ShareMenu.vue'
 import SharePanel from '@/components/common/SharePanel.vue'
+import StarTagPicker from '@/components/common/StarTagPicker.vue'
 import { detectMedia } from '@/utils/mediaDetect'
 
 const entryStore = useEntryStore()
@@ -23,7 +24,8 @@ const readerEl = ref<HTMLElement | null>(null)
 
 const faviconError = ref(false)
 const shareOpen = ref(false)
-watch(() => entry.value?.id, () => { faviconError.value = false; shareOpen.value = false })
+const starPickerOpen = ref(false)
+watch(() => entry.value?.id, () => { faviconError.value = false; shareOpen.value = false; starPickerOpen.value = false })
 
 // Focus the reader panel when a new entry is selected
 watch(
@@ -78,8 +80,18 @@ const timeAgo = computed(() => {
 
 const isStarred = computed(() => !!entry.value?.starred_at)
 
-function toggleStar() {
-  if (entry.value) entryStore.toggleStar(entry.value.id)
+function handleStarClick() {
+  if (!entry.value) return
+  if (isStarred.value) {
+    entryStore.toggleStar(entry.value.id)
+  } else {
+    starPickerOpen.value = !starPickerOpen.value
+  }
+}
+
+function onStarTagSelect(tagId: string | null) {
+  if (entry.value) entryStore.toggleStar(entry.value.id, tagId)
+  starPickerOpen.value = false
 }
 
 function openExternal() {
@@ -110,16 +122,23 @@ function openExternal() {
           <ArrowTopRightOnSquareIcon class="h-4 w-4" />
           <span class="hidden md:inline">Open</span>
         </button>
-        <button
-          class="btn-ghost text-xs gap-1"
-          :aria-label="isStarred ? 'Unstar this entry' : 'Star this entry'"
-          :aria-pressed="isStarred"
-          @click="toggleStar"
-        >
-          <StarSolid v-if="isStarred" class="h-4 w-4 text-star" />
-          <StarOutline v-else class="h-4 w-4" />
-          <span class="hidden md:inline">{{ isStarred ? 'Starred' : 'Star' }}</span>
-        </button>
+        <div class="relative">
+          <button
+            class="btn-ghost text-xs gap-1"
+            :aria-label="isStarred ? 'Unstar this entry' : 'Star this entry'"
+            :aria-pressed="isStarred"
+            @click="handleStarClick"
+          >
+            <StarSolid v-if="isStarred" class="h-4 w-4 text-star" />
+            <StarOutline v-else class="h-4 w-4" />
+            <span class="hidden md:inline">{{ isStarred ? 'Starred' : 'Star' }}</span>
+          </button>
+          <StarTagPicker
+            v-if="starPickerOpen"
+            @select="onStarTagSelect"
+            @cancel="starPickerOpen = false"
+          />
+        </div>
         <ShareMenu
           v-if="entry.url"
           v-model:open="shareOpen"

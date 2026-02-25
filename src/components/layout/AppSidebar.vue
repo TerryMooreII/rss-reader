@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feeds'
 import { useGroupStore } from '@/stores/groups'
 import { useUIStore } from '@/stores/ui'
+import { useStarTagStore } from '@/stores/starTags'
 import { useNotificationStore } from '@/stores/notifications'
 import { FEED_CATEGORIES } from '@/config/constants'
 import {
@@ -53,6 +54,7 @@ const authStore = useAuthStore()
 const feedStore = useFeedStore()
 const groupStore = useGroupStore()
 const ui = useUIStore()
+const starTagStore = useStarTagStore()
 const notifications = useNotificationStore()
 
 const showAddFeed = ref(false)
@@ -161,6 +163,10 @@ function isCategoryActive(category: string) {
   return route.name === 'category-entries' && route.params.category === category
 }
 
+function isStarTagActive(tagId: string) {
+  return route.name === 'star-tag-entries' && route.params.starTagId === tagId
+}
+
 function onCategoryClick(category: string) {
   router.push({ name: 'category-entries', params: { category } })
   feedStore.toggleCategory(category)
@@ -216,12 +222,44 @@ function categoryUnread(category: string): number {
 
       <RouterLink
         to="/app/starred"
+        class="group/starred"
         :class="isActive('starred-entries') ? 'sidebar-item-active' : 'sidebar-item'"
         :aria-current="isActive('starred-entries') ? 'page' : undefined"
       >
-        <StarIcon class="h-5 w-5 shrink-0" />
+        <span v-if="starTagStore.sortedTags.length > 0" class="relative h-5 w-5 shrink-0">
+          <StarIcon class="h-5 w-5 absolute inset-0 transition-opacity group-hover/starred:opacity-0" />
+          <ChevronRightIcon
+            class="h-5 w-5 absolute inset-0 opacity-0 transition-all group-hover/starred:opacity-100"
+            :class="{ 'rotate-90': starTagStore.expandedStarred }"
+            @click.prevent.stop="starTagStore.toggleStarred()"
+          />
+        </span>
+        <StarIcon v-else class="h-5 w-5 shrink-0" />
         <span class="flex-1">Starred</span>
       </RouterLink>
+
+      <!-- Star tag sub-items -->
+      <div
+        v-if="starTagStore.expandedStarred && starTagStore.sortedTags.length > 0"
+        class="pl-4 space-y-0.5"
+      >
+        <RouterLink
+          v-for="tag in starTagStore.sortedTags"
+          :key="tag.id"
+          :to="`/app/starred/tag/${tag.id}`"
+          :class="isStarTagActive(tag.id) ? 'sidebar-item-active' : 'sidebar-item'"
+          :aria-current="isStarTagActive(tag.id) ? 'page' : undefined"
+        >
+          <StarIcon class="h-4 w-4 shrink-0 text-star" />
+          <span class="flex-1 truncate">{{ tag.name }}</span>
+          <span
+            v-if="(tag.unread_count ?? 0) > 0"
+            class="ml-auto rounded-full bg-badge/10 px-2 py-0.5 text-xs font-medium text-badge"
+          >
+            {{ (tag.unread_count ?? 0) > 999 ? '999+' : tag.unread_count }}
+          </span>
+        </RouterLink>
+      </div>
 
       <RouterLink
         to="/app/discover"

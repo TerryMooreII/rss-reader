@@ -160,6 +160,15 @@ export const useEntryStore = defineStore('entries', () => {
         }
         break
 
+      case 'star_tag':
+        rpcName = 'get_starred_entries_by_tag'
+        params.p_star_tag_id = f.starTagId
+        if (cursor && cursor.starred_at) {
+          params.p_cursor_starred_at = cursor.starred_at
+          params.p_cursor_id = cursor.id
+        }
+        break
+
       case 'search':
         rpcName = 'search_entries'
         params.p_query = f.query
@@ -389,26 +398,39 @@ export const useEntryStore = defineStore('entries', () => {
     }
   }
 
-  async function toggleStar(entryId: string): Promise<void> {
+  async function toggleStar(entryId: string, starTagId?: string | null): Promise<void> {
     const entry = entries.value.find((e) => e.id === entryId)
     if (!entry) return
 
     error.value = null
 
     try {
-      const newStarredAt = entry.starred_at ? null : new Date().toISOString()
+      const isUnstarring = !!entry.starred_at
+      const newStarredAt = isUnstarring ? null : new Date().toISOString()
+      const newStarTagId = isUnstarring ? null : (starTagId ?? null)
       const userId = _getUserId()
 
       const { error: upsertError } = await supabase
         .from('user_entry_status')
         .upsert(
-          { user_id: userId, entry_id: entryId, starred_at: newStarredAt },
+          {
+            user_id: userId,
+            entry_id: entryId,
+            starred_at: newStarredAt,
+            star_tag_id: newStarTagId,
+          },
           { onConflict: 'user_id,entry_id' },
         )
 
       if (upsertError) throw upsertError
 
       entry.starred_at = newStarredAt
+      entry.star_tag_id = newStarTagId
+
+      // Update star tag unread counts
+      if (isUnstarring && entry.star_tag_id) {
+        // Was tagged — handled above via null assignment
+      }
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to toggle star'
     }

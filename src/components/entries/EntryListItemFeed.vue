@@ -16,6 +16,7 @@ import { StarIcon as StarSolid } from '@heroicons/vue/24/solid'
 import MediaEmbed from '@/components/reader/MediaEmbed.vue'
 import ShareMenu from '@/components/common/ShareMenu.vue'
 import SharePanel from '@/components/common/SharePanel.vue'
+import StarTagPicker from '@/components/common/StarTagPicker.vue'
 import { detectMedia } from '@/utils/mediaDetect'
 
 const props = defineProps<{
@@ -34,6 +35,7 @@ let markReadTimer: ReturnType<typeof setTimeout> | null = null
 
 const faviconError = ref(false)
 const shareOpen = ref(false)
+const starPickerOpen = ref(false)
 
 const isRead = computed(() => !!props.entry.read_at)
 const isStarred = computed(() => !!props.entry.starred_at)
@@ -110,9 +112,18 @@ onUnmounted(() => {
   if (markReadTimer) clearTimeout(markReadTimer)
 })
 
-function toggleStar(e: Event) {
+function handleStarClick(e: Event) {
   e.stopPropagation()
-  entryStore.toggleStar(props.entry.id)
+  if (isStarred.value) {
+    entryStore.toggleStar(props.entry.id)
+  } else {
+    starPickerOpen.value = !starPickerOpen.value
+  }
+}
+
+function onStarTagSelect(tagId: string | null) {
+  entryStore.toggleStar(props.entry.id, tagId)
+  starPickerOpen.value = false
 }
 
 function toggleRead(e: Event) {
@@ -139,7 +150,7 @@ function collapse(e: Event) {
 
 <template>
   <article
-    class="group/entry border-b border-border cursor-pointer transition-colors outline-none overflow-hidden"
+    class="group/entry border-b border-border cursor-pointer transition-colors outline-none"
     :class="[
       expanded ? 'bg-bg-secondary/50' : 'hover:bg-bg-hover',
     ]"
@@ -231,17 +242,24 @@ function collapse(e: Event) {
         class="flex items-center gap-1 mt-3 -ml-1.5 transition-opacity flex-wrap"
         :class="expanded ? 'opacity-100' : 'opacity-0 group-hover/entry:opacity-100 focus-within:opacity-100'"
       >
-        <button
-          class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors"
-          :class="isStarred ? 'text-star' : 'text-text-muted hover:text-star hover:bg-bg-hover'"
-          :aria-label="isStarred ? 'Unstar this entry' : 'Star this entry'"
-          :aria-pressed="isStarred"
-          @click="toggleStar"
-        >
-          <StarSolid v-if="isStarred" class="h-4 w-4" />
-          <StarOutline v-else class="h-4 w-4" />
-          <span class="hidden md:inline">{{ isStarred ? 'Starred' : 'Star' }}</span>
-        </button>
+        <div class="relative">
+          <button
+            class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors"
+            :class="isStarred ? 'text-star' : 'text-text-muted hover:text-star hover:bg-bg-hover'"
+            :aria-label="isStarred ? 'Unstar this entry' : 'Star this entry'"
+            :aria-pressed="isStarred"
+            @click="handleStarClick"
+          >
+            <StarSolid v-if="isStarred" class="h-4 w-4" />
+            <StarOutline v-else class="h-4 w-4" />
+            <span class="hidden md:inline">{{ isStarred ? 'Starred' : 'Star' }}</span>
+          </button>
+          <StarTagPicker
+            v-if="starPickerOpen"
+            @select="onStarTagSelect"
+            @cancel="starPickerOpen = false"
+          />
+        </div>
 
         <button
           class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
