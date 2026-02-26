@@ -41,6 +41,7 @@ import {
   VideoCameraIcon,
   PencilSquareIcon,
   TagIcon,
+  EllipsisVerticalIcon,
 } from '@heroicons/vue/24/outline'
 import SidebarFeedItem from '@/components/sidebar/SidebarFeedItem.vue'
 import SidebarGroupItem from '@/components/sidebar/SidebarGroupItem.vue'
@@ -220,23 +221,33 @@ function categoryUnread(category: string): number {
         </span>
       </RouterLink>
 
-      <RouterLink
-        to="/app/starred"
-        class="group/starred"
-        :class="isActive('starred-entries') ? 'sidebar-item-active' : 'sidebar-item'"
-        :aria-current="isActive('starred-entries') ? 'page' : undefined"
-      >
-        <span v-if="starTagStore.sortedTags.length > 0" class="relative h-5 w-5 shrink-0">
-          <StarIcon class="h-5 w-5 absolute inset-0 transition-opacity group-hover/starred:opacity-0" />
-          <ChevronRightIcon
-            class="h-5 w-5 absolute inset-0 opacity-0 transition-all group-hover/starred:opacity-100"
-            :class="{ 'rotate-90': starTagStore.expandedStarred }"
-            @click.prevent.stop="starTagStore.toggleStarred()"
-          />
-        </span>
-        <StarIcon v-else class="h-5 w-5 shrink-0" />
-        <span class="flex-1">Starred</span>
-      </RouterLink>
+      <div class="group/starred-row relative flex items-center">
+        <RouterLink
+          to="/app/starred"
+          class="flex-1 group/starred"
+          :class="isActive('starred-entries') ? 'sidebar-item-active' : 'sidebar-item'"
+          :aria-current="isActive('starred-entries') ? 'page' : undefined"
+        >
+          <span v-if="starTagStore.sortedTags.length > 0" class="relative h-5 w-5 shrink-0">
+            <StarIcon class="h-5 w-5 absolute inset-0 transition-opacity group-hover/starred:opacity-0" />
+            <ChevronRightIcon
+              class="h-5 w-5 absolute inset-0 opacity-0 transition-all group-hover/starred:opacity-100"
+              :class="{ 'rotate-90': starTagStore.expandedStarred }"
+              @click.prevent.stop="starTagStore.toggleStarred()"
+            />
+          </span>
+          <StarIcon v-else class="h-5 w-5 shrink-0" />
+          <span class="flex-1">Starred</span>
+        </RouterLink>
+        <RouterLink
+          to="/app/settings?tab=filters"
+          class="absolute right-1 rounded p-1 text-text-muted opacity-0 hover:bg-bg-hover hover:text-text-primary group-hover/starred-row:opacity-100 transition-opacity"
+          aria-label="Manage filters"
+          @click.stop
+        >
+          <EllipsisVerticalIcon class="h-4 w-4" />
+        </RouterLink>
+      </div>
 
       <!-- Star tag sub-items -->
       <div

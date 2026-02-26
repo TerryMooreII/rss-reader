@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Bars3Icon } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
@@ -13,7 +14,8 @@ const authStore = useAuthStore()
 const ui = useUIStore()
 const notifications = useNotificationStore()
 
-const activeTab = ref('general')
+const route = useRoute()
+const router = useRouter()
 
 const tabs = [
   { id: 'general', label: 'General' },
@@ -25,6 +27,13 @@ const tabs = [
   { id: 'import-export', label: 'Import / Export' },
   { id: 'keyboard', label: 'Keyboard' },
 ]
+
+const tabParam = route.query.tab as string | undefined
+const activeTab = ref(tabs.some((t) => t.id === tabParam) ? tabParam! : 'general')
+
+watch(activeTab, (tab) => {
+  router.replace({ query: tab === 'general' ? {} : { tab } })
+})
 
 async function handleExportOPML() {
   try {
