@@ -15,7 +15,7 @@ const router = useRouter()
 const route = useRoute()
 
 const inputRef = ref<HTMLInputElement | null>(null)
-const helpBtnRef = ref<{ el: HTMLElement } | null>(null)
+const helpBtnRef = ref<{ el: HTMLElement; $el?: HTMLElement } | null>(null)
 const localQuery = ref(ui.searchQuery)
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
