@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useFeedStore } from '@/stores/feeds'
 import { useEntryStore } from '@/stores/entries'
@@ -14,6 +14,7 @@ import AppSidebar from '@/components/layout/AppSidebar.vue'
 import MobileNav from '@/components/layout/MobileNav.vue'
 
 const route = useRoute()
+const router = useRouter()
 const ui = useUIStore()
 const feedStore = useFeedStore()
 const entryStore = useEntryStore()
@@ -120,6 +121,12 @@ onMounted(async () => {
     starTagStore.fetchTags(),
     ui.loadSettingsFromDB(authStore.user!.id),
   ])
+
+  // New users with no feeds: send them to Discover instead of a blank "All" page
+  if (feedStore.feeds.length === 0 && route.name === 'all-entries') {
+    router.replace({ name: 'discover' })
+  }
+
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
   window.addEventListener('resize', onResize)
