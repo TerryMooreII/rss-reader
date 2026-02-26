@@ -91,12 +91,6 @@ function shareHackerNews(e: Event) {
   openShareWindow(e, `https://news.ycombinator.com/submitlink?u=${u}&t=${t}`)
 }
 
-function sharePocket(e: Event) {
-  const u = encodeURIComponent(props.url)
-  const t = encodeURIComponent(props.title)
-  openShareWindow(e, `https://getpocket.com/save?url=${u}&title=${t}`)
-}
-
 function shareInstapaper(e: Event) {
   const u = encodeURIComponent(props.url)
   const t = encodeURIComponent(props.title)

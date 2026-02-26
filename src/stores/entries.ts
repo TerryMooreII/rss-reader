@@ -60,11 +60,12 @@ export const useEntryStore = defineStore('entries', () => {
       if (!groupFeedIds.includes(entry.feed_id)) return false
     }
 
-    const kw = rule.keyword.toLowerCase()
-    const title = (entry.title ?? '').toLowerCase()
-    const content = stripHtml(entry.content_html).toLowerCase()
+    const escaped = rule.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`\\b${escaped}\\b`, 'i')
+    const title = entry.title ?? ''
+    const content = stripHtml(entry.content_html)
 
-    return title.includes(kw) || content.includes(kw)
+    return re.test(title) || re.test(content)
   }
 
   // ---------------------------------------------------------------------------
@@ -170,7 +171,7 @@ export const useEntryStore = defineStore('entries', () => {
         break
 
       case 'search':
-        rpcName = 'search_entries'
+        rpcName = f.scope === 'all' ? 'search_all_entries' : 'search_entries'
         params.p_query = f.query
         // search uses offset-based pagination, no p_unread_only
         params.p_offset = searchOffset
@@ -203,15 +204,22 @@ export const useEntryStore = defineStore('entries', () => {
   // Actions
   // ---------------------------------------------------------------------------
 
-  function _autoMarkReadFiltered(): void {
+  function _autoApplyFilters(): void {
     const filterStore = useFilterStore()
     const markReadRules = filterStore.enabledFilters.filter((f) => f.action === 'mark_read')
-    if (markReadRules.length === 0) return
+    const autoStarRules = filterStore.enabledFilters.filter((f) => f.action === 'auto_star')
+
+    if (markReadRules.length === 0 && autoStarRules.length === 0) return
 
     for (const entry of entries.value) {
-      if (entry.read_at) continue
-      if (markReadRules.some((rule) => _entryMatchesKeyword(rule, entry))) {
+      if (!entry.read_at && markReadRules.some((rule) => _entryMatchesKeyword(rule, entry))) {
         markRead(entry.id)
+      }
+      if (!entry.starred_at && autoStarRules.length > 0) {
+        const matchedRule = autoStarRules.find((rule) => _entryMatchesKeyword(rule, entry))
+        if (matchedRule) {
+          toggleStar(entry.id, matchedRule.star_tag_id)
+        }
       }
     }
   }
@@ -235,7 +243,7 @@ export const useEntryStore = defineStore('entries', () => {
       if (newFilter.type === 'search') {
         searchOffset = rows.length
       }
-      _autoMarkReadFiltered()
+      _autoApplyFilters()
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch entries'
     } finally {
@@ -272,7 +280,7 @@ export const useEntryStore = defineStore('entries', () => {
       if (filter.value.type === 'search') {
         searchOffset += rows.length
       }
-      _autoMarkReadFiltered()
+      _autoApplyFilters()
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to load more entries'
     } finally {
@@ -437,6 +445,8 @@ export const useEntryStore = defineStore('entries', () => {
   }
 
   async function markAllRead(): Promise<void> {
+    if (filter.value.type === 'search') return
+
     error.value = null
     markingAllRead.value = true
 

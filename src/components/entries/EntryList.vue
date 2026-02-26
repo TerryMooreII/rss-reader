@@ -93,6 +93,14 @@ async function handleRefresh() {
   }
 }
 
+function searchAllFeeds() {
+  ui.setSearchScope('all')
+  router.push({
+    name: 'search-entries',
+    query: { q: entryStore.filter.query, scope: 'all' },
+  })
+}
+
 // Reset expanded entry when switching modes or filters
 watch(() => ui.displayMode, () => {
   expandedEntryId.value = null
@@ -110,8 +118,20 @@ watch(() => entryStore.filter, () => {
       v-if="!entryStore.loading && entryStore.filteredEntries.length === 0"
       class="flex flex-col items-center justify-center py-20 text-center"
     >
-      <p class="text-lg font-medium text-text-secondary">No entries found</p>
-      <p v-if="entryStore.filter.unreadOnly && isAllView" class="mt-1 text-sm text-text-muted">
+      <p class="text-lg font-medium text-text-secondary">
+        {{ entryStore.filter.type === 'search' ? 'No results found' : 'No entries found' }}
+      </p>
+      <p v-if="entryStore.filter.type === 'search' && entryStore.filter.scope !== 'all'" class="mt-1 text-sm text-text-muted">
+        No results for "{{ entryStore.filter.query }}".
+        Try searching
+        <button class="text-accent hover:underline" @click="searchAllFeeds">all feeds</button>
+        instead.
+      </p>
+      <p v-else-if="entryStore.filter.type === 'search'" class="mt-1 text-sm text-text-muted">
+        No results for "{{ entryStore.filter.query }}".
+        Try different keywords, quotes for exact phrases, or OR between words.
+      </p>
+      <p v-else-if="entryStore.filter.unreadOnly && isAllView" class="mt-1 text-sm text-text-muted">
         All caught up!
         <button
           class="text-accent hover:underline"

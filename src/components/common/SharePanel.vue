@@ -73,12 +73,6 @@ function shareHackerNews(e: Event) {
   openShareWindow(e, `https://news.ycombinator.com/submitlink?u=${u}&t=${t}`)
 }
 
-function sharePocket(e: Event) {
-  const u = encodeURIComponent(props.url)
-  const t = encodeURIComponent(props.title)
-  openShareWindow(e, `https://getpocket.com/save?url=${u}&title=${t}`)
-}
-
 function shareInstapaper(e: Event) {
   const u = encodeURIComponent(props.url)
   const t = encodeURIComponent(props.title)
@@ -167,14 +161,6 @@ function shareNotion(e: Event) {
     >
       <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M0 0v24h24V0H0zm12.6 13.5v5.1h-1.2v-5.1L7.5 5.4h1.4l3.1 6.3 3.1-6.3h1.4l-3.9 8.1z"/></svg>
       <span class="truncate">Hacker News</span>
-    </button>
-
-    <button
-      class="flex flex-col items-center gap-1.5 rounded-lg px-2 py-2.5 text-xs text-text-primary transition-colors hover:bg-bg-hover"
-      @click="sharePocket"
-    >
-      <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M18.813 10.259l-5.646 5.419a1.649 1.649 0 0 1-2.282 0l-5.646-5.419a1.649 1.649 0 0 1 2.282-2.377L12 12.011l4.479-4.129a1.649 1.649 0 0 1 2.334 2.377zM23.547 3.374C23.196 2.521 22.391 2 21.498 2H2.502C1.609 2 .804 2.521.453 3.374A3.03 3.03 0 0 0 0 4.62v6.96c0 6.627 5.373 12 12 12s12-5.373 12-12V4.62c0-.428-.152-.845-.453-1.246z"/></svg>
-      <span class="truncate">Pocket</span>
     </button>
 
     <button

@@ -110,6 +110,7 @@ export interface EntryFilter {
   groupId?: string
   category?: string
   query?: string
+  scope?: 'subscribed' | 'all'
   starTagId?: string
   unreadOnly: boolean
 }

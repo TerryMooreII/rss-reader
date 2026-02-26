@@ -74,6 +74,9 @@ export const useUIStore = defineStore('ui', () => {
   // ---------------------------------------------------------------------------
   const readerOpen = ref(false)
   const searchOpen = ref(false)
+  const searchQuery = ref('')
+  const searchScope = ref<'subscribed' | 'all'>('subscribed')
+  const preSearchRoute = ref<string | null>(null)
   const shortcutsDialogOpen = ref(false)
 
   // ---------------------------------------------------------------------------
@@ -268,8 +271,29 @@ export const useUIStore = defineStore('ui', () => {
     readerOpen.value = false
   }
 
+  function openSearch(): void {
+    searchOpen.value = true
+  }
+
+  function closeSearch(): void {
+    searchOpen.value = false
+    searchQuery.value = ''
+  }
+
   function toggleSearch(): void {
-    searchOpen.value = !searchOpen.value
+    if (searchOpen.value) {
+      closeSearch()
+    } else {
+      openSearch()
+    }
+  }
+
+  function setSearchScope(scope: 'subscribed' | 'all'): void {
+    searchScope.value = scope
+  }
+
+  function setPreSearchRoute(path: string): void {
+    preSearchRoute.value = path
   }
 
   function setFontSize(size: FontSize): void {
@@ -304,6 +328,9 @@ export const useUIStore = defineStore('ui', () => {
     // Transient state
     readerOpen,
     searchOpen,
+    searchQuery,
+    searchScope,
+    preSearchRoute,
     shortcutsDialogOpen,
     // Sync state
     settingsLoaded,
@@ -321,7 +348,11 @@ export const useUIStore = defineStore('ui', () => {
     closeReader,
     setFontSize,
     setUnreadOnly,
+    openSearch,
+    closeSearch,
     toggleSearch,
+    setSearchScope,
+    setPreSearchRoute,
     toggleShortcutsDialog,
   }
 })

@@ -102,7 +102,7 @@ useKeyboardShortcuts([
     },
     description: 'Open reader',
   },
-  { key: 'Escape', handler: () => ui.closeReader(), description: 'Close reader' },
+  { key: 'Escape', handler: () => { if (ui.searchOpen) ui.closeSearch(); else ui.closeReader() }, description: 'Close reader / search' },
   { key: '/', handler: () => ui.toggleSearch(), description: 'Focus search' },
   {
     key: '?',
