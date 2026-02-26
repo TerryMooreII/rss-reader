@@ -183,6 +183,10 @@ async function confirmDelete(id: string) {
       <h2 class="text-lg font-semibold text-text-primary mb-1">Content Filters</h2>
       <p class="text-sm text-text-muted">
         Hide or auto-mark entries that match specific keywords. Filters apply to entry titles and content.
+        Use search syntax: <code class="text-text-primary bg-bg-secondary px-1 rounded text-xs">word1 word2</code> for AND,
+        <code class="text-text-primary bg-bg-secondary px-1 rounded text-xs">OR</code> between words,
+        <code class="text-text-primary bg-bg-secondary px-1 rounded text-xs">"exact phrase"</code>,
+        <code class="text-text-primary bg-bg-secondary px-1 rounded text-xs">-word</code> to exclude.
       </p>
     </div>
 
@@ -193,7 +197,7 @@ async function confirmDelete(id: string) {
       <input
         v-model="newKeyword"
         type="text"
-        placeholder="Keyword to filter (e.g. sponsored)"
+        placeholder="e.g. sponsored, crypto OR nft, &quot;breaking news&quot; -sports"
         class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
         @keydown.enter="createFilter"
       />

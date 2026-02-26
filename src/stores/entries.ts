@@ -7,6 +7,7 @@ import { useGroupStore } from './groups'
 import { useAuthStore } from './auth'
 import { useUIStore } from './ui'
 import { useFilterStore } from './filters'
+import { compileWebSearchQuery } from '@/utils/webSearchMatch'
 
 const _ta = document.createElement('textarea')
 function decodeHtml(s: string | null | undefined): string | null {
@@ -52,6 +53,18 @@ export const useEntryStore = defineStore('entries', () => {
   // Filter helpers
   // ---------------------------------------------------------------------------
 
+  // Cache compiled filter predicates so we don't reparse on every entry
+  const _filterPredicates = new Map<string, (text: string) => boolean>()
+
+  function _getFilterPredicate(keyword: string): (text: string) => boolean {
+    let pred = _filterPredicates.get(keyword)
+    if (!pred) {
+      pred = compileWebSearchQuery(keyword)
+      _filterPredicates.set(keyword, pred)
+    }
+    return pred
+  }
+
   function _entryMatchesKeyword(rule: ContentFilter, entry: Entry): boolean {
     if (rule.scope_type === 'feed' && rule.scope_id !== entry.feed_id) return false
     if (rule.scope_type === 'group') {
@@ -60,12 +73,11 @@ export const useEntryStore = defineStore('entries', () => {
       if (!groupFeedIds.includes(entry.feed_id)) return false
     }
 
-    const escaped = rule.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const re = new RegExp(`\\b${escaped}\\b`, 'i')
+    const predicate = _getFilterPredicate(rule.keyword)
     const title = entry.title ?? ''
     const content = stripHtml(entry.content_html)
 
-    return re.test(title) || re.test(content)
+    return predicate(title) || predicate(content)
   }
 
   // ---------------------------------------------------------------------------
