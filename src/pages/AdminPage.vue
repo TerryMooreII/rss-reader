@@ -48,6 +48,7 @@ const pageSize = ref(25)
 const currentPage = ref(1)
 const totalFeeds = ref(0)
 const faviconErrors = ref(new Set<string>())
+const refetchingFeedIcons = ref(new Set<string>())
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalFeeds.value / pageSize.value)))
 
@@ -328,6 +329,34 @@ async function refetchFavicon() {
   }
 }
 
+async function refetchFeedFavicon(feed: any) {
+  const url = feed.site_url || feed.url
+  let domain: string
+  try {
+    domain = new URL(url).hostname
+  } catch {
+    notifications.error('Could not determine domain from feed URL')
+    return
+  }
+  refetchingFeedIcons.value.add(feed.id)
+  const newFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+  try {
+    const { error } = await supabase.from('feeds').update({ favicon_url: newFaviconUrl }).eq('id', feed.id)
+    if (error) throw error
+    feed.favicon_url = newFaviconUrl
+    faviconErrors.value.delete(feed.id)
+    if (managedFeed.value?.id === feed.id) {
+      managedFeed.value.favicon_url = newFaviconUrl
+      managedFaviconError.value = false
+    }
+    notifications.success('Icon refreshed')
+  } catch (e: any) {
+    notifications.error(e.message || 'Failed to update icon')
+  } finally {
+    refetchingFeedIcons.value.delete(feed.id)
+  }
+}
+
 async function deleteManagedFeed() {
   if (!managedFeed.value) return
   if (!confirm('Delete this feed and all its entries? This cannot be undone.')) return
@@ -567,14 +596,25 @@ onMounted(() => {
               <tr v-for="feed in feeds" v-else :key="feed.id" class="border-b last:border-0">
                 <td class="py-2 pr-4">
                   <div class="flex items-center gap-2">
-                    <img
-                      v-if="feed.favicon_url && !faviconErrors.has(feed.id)"
-                      :src="feed.favicon_url"
-                      alt=""
-                      class="h-4 w-4 rounded"
-                      @error="faviconErrors.add(feed.id)"
-                    />
-                    <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" />
+                    <button
+                      class="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-primary bg-bg-secondary hover:bg-bg-tertiary transition-colors"
+                      :disabled="refetchingFeedIcons.has(feed.id)"
+                      title="Refetch favicon"
+                      @click.stop="refetchFeedFavicon(feed)"
+                    >
+                      <ArrowPathIcon
+                        v-if="refetchingFeedIcons.has(feed.id)"
+                        class="h-3.5 w-3.5 animate-spin text-text-muted"
+                      />
+                      <img
+                        v-else-if="feed.favicon_url && !faviconErrors.has(feed.id)"
+                        :src="feed.favicon_url"
+                        alt=""
+                        class="h-4 w-4 rounded"
+                        @error="faviconErrors.add(feed.id)"
+                      />
+                      <RssIcon v-else class="h-3.5 w-3.5 text-text-muted" />
+                    </button>
                     <div class="min-w-0">
                       <p class="truncate font-medium text-text-primary max-w-xs">
                         {{ feed.title || feed.url }}

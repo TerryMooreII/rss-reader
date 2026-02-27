@@ -93,6 +93,17 @@ function makeSubscriber(feedId: string) {
   }
 }
 
+async function fetchPreviewEntries(feedId: string) {
+  const { data, error } = await supabase
+    .from('entries')
+    .select('title, url, published_at, author')
+    .eq('feed_id', feedId)
+    .order('published_at', { ascending: false })
+    .limit(5)
+  if (error) throw error
+  return data || []
+}
+
 async function togglePreview(feedId: string) {
   if (expandedFeedId.value === feedId) {
     expandedFeedId.value = null
@@ -105,14 +116,19 @@ async function togglePreview(feedId: string) {
 
   previewLoading.value = feedId
   try {
-    const { data, error } = await supabase
-      .from('entries')
-      .select('title, url, published_at, author')
-      .eq('feed_id', feedId)
-      .order('published_at', { ascending: false })
-      .limit(5)
-    if (error) throw error
-    previewEntries.value[feedId] = data || []
+    let entries = await fetchPreviewEntries(feedId)
+
+    // If no entries exist, try fetching them on-demand via edge function
+    if (entries.length === 0) {
+      const { error: fnError } = await supabase.functions.invoke('fetch-feed-entries', {
+        body: { feed_id: feedId },
+      })
+      if (!fnError) {
+        entries = await fetchPreviewEntries(feedId)
+      }
+    }
+
+    previewEntries.value[feedId] = entries
   } catch {
     previewEntries.value[feedId] = []
   } finally {
