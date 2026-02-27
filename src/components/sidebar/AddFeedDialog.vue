@@ -9,21 +9,25 @@ import {
 } from '@headlessui/vue'
 import { XMarkIcon, RssIcon } from '@heroicons/vue/24/outline'
 import { useFeedStore } from '@/stores/feeds'
+import { useGroupStore } from '@/stores/groups'
 import { useNotificationStore } from '@/stores/notifications'
 import { FEED_CATEGORIES } from '@/config/constants'
 import { addFeed, importOPML } from '@/services/feeds.service'
 import { detectPlatformHint } from '@/utils/platformDetect'
+import GroupSelector from '@/components/common/GroupSelector.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const feedStore = useFeedStore()
+const groupStore = useGroupStore()
 const notifications = useNotificationStore()
 
 const feedUrl = ref('')
 const category = ref('other')
 const isPrivate = ref(false)
 const loading = ref(false)
+const selectedGroupIds = ref<string[]>([])
 const opmlFile = ref<File | null>(null)
 const mode = ref<'url' | 'opml'>('url')
 
@@ -36,6 +40,7 @@ watch(
       feedUrl.value = ''
       category.value = 'other'
       isPrivate.value = false
+      selectedGroupIds.value = []
       opmlFile.value = null
       mode.value = 'url'
     }
@@ -49,8 +54,19 @@ async function handleAddFeed() {
     const result = await addFeed(feedUrl.value.trim(), category.value, isPrivate.value)
     // Subscribe to the feed
     await feedStore.subscribeFeed(result.id)
+    // Add to selected groups
+    if (selectedGroupIds.value.length > 0) {
+      await Promise.allSettled(
+        selectedGroupIds.value.map((gid) => groupStore.addFeedToGroup(gid, result.id)),
+      )
+    }
     const platformName = result.platform ? ` (${result.platform})` : ''
-    notifications.success(result.created ? `Feed added and subscribed!${platformName}` : 'Subscribed to existing feed!')
+    const groupMsg = selectedGroupIds.value.length > 0
+      ? ` Added to ${selectedGroupIds.value.length} group(s).`
+      : ''
+    notifications.success(
+      (result.created ? `Feed added and subscribed!${platformName}` : 'Subscribed to existing feed!') + groupMsg,
+    )
     emit('close')
   } catch (e: any) {
     if (e?.code === '23505' || e?.message?.includes('subscriptions_unique')) {
@@ -186,6 +202,8 @@ function onFileChange(e: Event) {
                 <input v-model="isPrivate" type="checkbox" class="rounded border-border" />
                 Private feed (won't appear in Discover)
               </label>
+
+              <GroupSelector v-model="selectedGroupIds" mode="form" />
 
               <button type="submit" class="btn-primary w-full" :disabled="loading || !feedUrl">
                 {{ loading && platformHint ? `Resolving ${platformHint.label}...` : loading ? 'Adding...' : 'Add Feed' }}

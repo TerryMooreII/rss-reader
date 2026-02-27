@@ -90,10 +90,10 @@ async function createGroup() {
     const group = await groupStore.createGroup(newGroupName.value.trim())
     if (group) {
       groupStore.expandedGroups.add(group.id)
+      notifications.success('Group created')
+      newGroupName.value = ''
+      showCreateGroup.value = false
     }
-    notifications.success('Group created')
-    newGroupName.value = ''
-    showCreateGroup.value = false
   } catch {
     notifications.error('Failed to create group')
   }
@@ -301,7 +301,7 @@ function categoryUnread(category: string): number {
       </RouterLink>
 
       <!-- Groups -->
-      <div v-if="groupStore.sortedGroups.length > 0 || showCreateGroup" class="pt-4">
+      <div class="pt-4">
         <div class="flex items-center justify-between px-3 pb-1">
           <button
             class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-text-muted hover:text-text-primary"
@@ -338,6 +338,14 @@ function categoryUnread(category: string): number {
               @keydown.escape="cancelCreateGroup"
             />
           </div>
+
+          <!-- Empty state hint -->
+          <p
+            v-if="groupStore.sortedGroups.length === 0 && !showCreateGroup"
+            class="px-3 py-2 text-xs text-text-muted leading-relaxed"
+          >
+            Groups let you organize feeds your way. Hit <button class="inline text-text-secondary hover:text-text-primary" @click="openCreateGroup">+</button> to create one, then drag feeds into it.
+          </p>
 
           <div v-for="group in groupStore.sortedGroups" :key="group.id" class="space-y-0.5">
             <SidebarGroupItem

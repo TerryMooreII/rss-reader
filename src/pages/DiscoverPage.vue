@@ -13,8 +13,10 @@ import {
   RssIcon,
   Bars3Icon,
   ChevronRightIcon,
+  ChevronDownIcon,
 } from '@heroicons/vue/24/outline'
 import { useUIStore } from '@/stores/ui'
+import GroupSelector from '@/components/common/GroupSelector.vue'
 
 const ui = useUIStore()
 const feedStore = useFeedStore()
@@ -29,6 +31,7 @@ const feeds = ref<(Feed & { subscriber_count?: number })[]>([])
 const loading = ref(false)
 
 const actionLoading = ref<string | null>(null)
+const groupPickerFeedId = ref<string | null>(null)
 
 // Expandable preview state
 const expandedFeedId = ref<string | null>(null)
@@ -80,6 +83,13 @@ async function subscribe(feedId: string) {
     notifications.error(e.message || 'Failed to subscribe')
   } finally {
     actionLoading.value = null
+  }
+}
+
+function makeSubscriber(feedId: string) {
+  return async () => {
+    if (isSubscribed(feedId)) return
+    await feedStore.subscribeFeed(feedId)
   }
 }
 
@@ -251,6 +261,7 @@ onMounted(loadFeeds)
               </div>
             </div>
 
+            <!-- Subscribed: unsubscribe button -->
             <button
               v-if="isSubscribed(feed.id)"
               class="btn-ghost text-xs text-success shrink-0 hover:text-danger group/sub"
@@ -264,18 +275,36 @@ onMounted(loadFeeds)
                 <span class="hidden group-hover/sub:inline text-danger">Unsubscribe</span>
               </template>
             </button>
-            <button
-              v-else
-              class="btn-primary text-xs shrink-0"
-              :disabled="actionLoading === feed.id"
-              @click.stop="subscribe(feed.id)"
-            >
-              <span v-if="actionLoading === feed.id" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              <template v-else>
-                <PlusIcon class="h-4 w-4" />
-                <span class="hidden sm:inline">Subscribe</span>
-              </template>
-            </button>
+
+            <!-- Not subscribed: split button — Subscribe | Add to Group -->
+            <div v-else class="relative flex shrink-0" @click.stop>
+              <button
+                class="btn-primary text-xs rounded-r-none border-r border-white/20"
+                :disabled="actionLoading === feed.id"
+                @click="subscribe(feed.id)"
+              >
+                <span v-if="actionLoading === feed.id" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <template v-else>
+                  <PlusIcon class="h-4 w-4" />
+                  <span class="hidden sm:inline">Subscribe</span>
+                </template>
+              </button>
+              <button
+                class="btn-primary text-xs rounded-l-none px-1.5"
+                :disabled="actionLoading === feed.id"
+                @click="groupPickerFeedId = groupPickerFeedId === feed.id ? null : feed.id"
+              >
+                <ChevronDownIcon class="h-3.5 w-3.5" />
+              </button>
+              <GroupSelector
+                v-if="groupPickerFeedId === feed.id"
+                mode="dropdown"
+                :feed-id="feed.id"
+                :subscribe-first="makeSubscriber(feed.id)"
+                class="right-0 top-full"
+                @close="groupPickerFeedId = null"
+              />
+            </div>
           </div>
 
           <!-- Expanded preview -->

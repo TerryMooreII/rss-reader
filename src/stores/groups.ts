@@ -101,23 +101,19 @@ export const useGroupStore = defineStore('groups', () => {
    * Create a new group.
    */
   async function createGroup(name: string): Promise<Group | null> {
-    try {
-      const position = groups.value.length
-      const { data, error: insertError } = await supabase
-        .from('groups')
-        .insert({ name, position })
-        .select()
-        .single()
+    const authStore = useAuthStore()
+    const position = groups.value.length
+    const { data, error: insertError } = await supabase
+      .from('groups')
+      .insert({ name, position, user_id: authStore.user!.id })
+      .select()
+      .single()
 
-      if (insertError) throw insertError
+    if (insertError) throw insertError
 
-      const newGroup = data as Group
-      groups.value.push(newGroup)
-      return newGroup
-    } catch (err: unknown) {
-      console.error('Failed to create group:', err)
-      return null
-    }
+    const newGroup = data as Group
+    groups.value.push(newGroup)
+    return newGroup
   }
 
   /**

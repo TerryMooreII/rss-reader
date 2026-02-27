@@ -30,9 +30,11 @@ async function createGroup() {
   if (!newGroupName.value.trim()) return
 
   try {
-    await groupStore.createGroup(newGroupName.value.trim())
-    notifications.success('Group created')
-    newGroupName.value = ''
+    const group = await groupStore.createGroup(newGroupName.value.trim())
+    if (group) {
+      notifications.success('Group created')
+      newGroupName.value = ''
+    }
   } catch {
     notifications.error('Failed to create group')
   }
