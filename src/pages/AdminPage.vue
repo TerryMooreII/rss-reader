@@ -345,7 +345,7 @@ async function refetchFeedFavicon(feed: any) {
     if (error) throw error
     feed.favicon_url = newFaviconUrl
     faviconErrors.value.delete(feed.id)
-    if (managedFeed.value?.id === feed.id) {
+    if (managedFeed.value && managedFeed.value.id === feed.id) {
       managedFeed.value.favicon_url = newFaviconUrl
       managedFaviconError.value = false
     }
