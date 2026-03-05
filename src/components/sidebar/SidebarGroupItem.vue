@@ -190,21 +190,16 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
       ]"
       class="w-full"
     >
-      <!-- Expand/collapse chevron -->
-      <button
-        class="shrink-0"
-        :aria-expanded="isExpanded"
-        @click="toggleExpand"
-      >
+      <!-- Group icon / expand chevron (swap on hover) -->
+      <span class="relative h-5 w-5 shrink-0">
+        <FolderIcon class="h-5 w-5 absolute inset-0 transition-opacity group-hover/grp:opacity-0" aria-hidden="true" />
         <ChevronRightIcon
-          class="h-4 w-4 transition-transform"
+          class="h-5 w-5 absolute inset-0 opacity-0 transition-all group-hover/grp:opacity-100 cursor-pointer"
           :class="{ 'rotate-90': isExpanded }"
           aria-hidden="true"
+          @click="toggleExpand"
         />
-      </button>
-
-      <!-- Group icon -->
-      <FolderIcon class="h-5 w-5 shrink-0" aria-hidden="true" />
+      </span>
 
       <!-- Group name (clickable to navigate) -->
       <button
