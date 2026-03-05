@@ -86,6 +86,16 @@ interface CronRun {
   start_time: string
   end_time: string
   duration_ms: number
+  response_content: string | null
+}
+
+function parsePollResponse(run: CronRun): { feeds_polled?: number; new_entries?: number; errors?: number } | null {
+  if (!run.response_content) return null
+  try {
+    return JSON.parse(run.response_content)
+  } catch {
+    return null
+  }
 }
 const cronRuns = ref<CronRun[]>([])
 
@@ -698,12 +708,13 @@ onMounted(() => {
               <th class="pb-2 font-medium">Status</th>
               <th class="pb-2 font-medium">Time</th>
               <th class="pb-2 font-medium">Duration</th>
+              <th class="pb-2 font-medium">New Entries</th>
               <th class="pb-2 font-medium">Message</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="cronRuns.length === 0">
-              <td colspan="5" class="py-4 text-center text-text-muted">No cron runs yet</td>
+              <td colspan="6" class="py-4 text-center text-text-muted">No cron runs yet</td>
             </tr>
             <tr v-for="run in cronRuns" :key="run.run_id" class="border-b last:border-0">
               <td class="py-2 pr-4 font-medium text-text-primary">{{ run.job_name }}</td>
@@ -724,6 +735,20 @@ onMounted(() => {
               </td>
               <td class="py-2 pr-4 text-text-muted">
                 {{ run.duration_ms != null ? `${Math.round(run.duration_ms)}ms` : '-' }}
+              </td>
+              <td class="py-2 pr-4">
+                <template v-if="parsePollResponse(run)">
+                  <span
+                    class="font-medium"
+                    :class="parsePollResponse(run)!.new_entries! > 0 ? 'text-success' : 'text-text-muted'"
+                  >
+                    {{ parsePollResponse(run)!.new_entries ?? 0 }}
+                  </span>
+                  <span class="text-text-muted text-xs ml-1">
+                    ({{ parsePollResponse(run)!.feeds_polled }} feeds<template v-if="parsePollResponse(run)!.errors">, {{ parsePollResponse(run)!.errors }} err</template>)
+                  </span>
+                </template>
+                <span v-else class="text-text-muted">-</span>
               </td>
               <td class="py-2 text-text-muted truncate max-w-xs">
                 {{ run.return_message || '-' }}
