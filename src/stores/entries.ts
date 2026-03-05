@@ -166,9 +166,8 @@ export const useEntryStore = defineStore('entries', () => {
 
       case 'starred':
         rpcName = 'get_starred_entries'
-        // starred uses p_cursor_starred_at, no p_unread_only
-        if (cursor && cursor.starred_at) {
-          params.p_cursor_starred_at = cursor.starred_at
+        if (cursor) {
+          params.p_cursor_published_at = cursor.published_at
           params.p_cursor_id = cursor.id
         }
         break
@@ -176,8 +175,8 @@ export const useEntryStore = defineStore('entries', () => {
       case 'star_tag':
         rpcName = 'get_starred_entries_by_tag'
         params.p_star_tag_id = f.starTagId
-        if (cursor && cursor.starred_at) {
-          params.p_cursor_starred_at = cursor.starred_at
+        if (cursor) {
+          params.p_cursor_published_at = cursor.published_at
           params.p_cursor_id = cursor.id
         }
         break
