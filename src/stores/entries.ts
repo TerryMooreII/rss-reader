@@ -377,7 +377,6 @@ export const useEntryStore = defineStore('entries', () => {
 
       const feedStore = useFeedStore()
       feedStore.updateUnreadCount(entry.feed_id, -1)
-      feedStore.updateCategoryUnreadCount(entry.feed_id, -1)
       const groupStore = useGroupStore()
       groupStore.updateUnreadCountForFeed(entry.feed_id, -1)
     } catch (err: unknown) {
@@ -409,7 +408,6 @@ export const useEntryStore = defineStore('entries', () => {
 
       const feedStore = useFeedStore()
       feedStore.updateUnreadCount(entry.feed_id, delta)
-      feedStore.updateCategoryUnreadCount(entry.feed_id, delta)
       const groupStore = useGroupStore()
       groupStore.updateUnreadCountForFeed(entry.feed_id, delta)
     } catch (err: unknown) {
@@ -495,8 +493,7 @@ export const useEntryStore = defineStore('entries', () => {
       for (const entry of entries.value) {
         if (!entry.read_at) {
           feedStore.updateUnreadCount(entry.feed_id, -1)
-          feedStore.updateCategoryUnreadCount(entry.feed_id, -1)
-          groupStore.updateUnreadCountForFeed(entry.feed_id, -1)
+              groupStore.updateUnreadCountForFeed(entry.feed_id, -1)
           entry.read_at = now
         }
       }
@@ -523,7 +520,6 @@ export const useEntryStore = defineStore('entries', () => {
       const feedStore = useFeedStore()
       const oldCount = feedStore.feedById(feedId)?.unread_count ?? 0
       feedStore.updateUnreadCount(feedId, -oldCount)
-      feedStore.updateCategoryUnreadCount(feedId, -oldCount)
       const groupStore = useGroupStore()
       groupStore.updateUnreadCountForFeed(feedId, -oldCount)
 
@@ -552,7 +548,6 @@ export const useEntryStore = defineStore('entries', () => {
       for (const fid of feedIds) {
         const oldCount = feedStore.feedById(fid)?.unread_count ?? 0
         feedStore.updateUnreadCount(fid, -oldCount)
-        feedStore.updateCategoryUnreadCount(fid, -oldCount)
       }
 
       // Update group unread count locally
@@ -581,12 +576,11 @@ export const useEntryStore = defineStore('entries', () => {
 
       const feedStore = useFeedStore()
       const groupStore = useGroupStore()
-      const feedsInCat = feedStore.feedsByCategory.get(category) ?? []
+      const feedsInCat = feedStore.feeds.filter((f) => (f.category || 'other') === category)
       for (const feed of feedsInCat) {
         groupStore.updateUnreadCountForFeed(feed.id, -feed.unread_count)
         feedStore.updateUnreadCount(feed.id, -feed.unread_count)
       }
-      feedStore.categoryUnreadCounts.set(category, 0)
 
       // Update any visible entries belonging to feeds in this category
       const feedIdSet = new Set(feedsInCat.map((f) => f.id))

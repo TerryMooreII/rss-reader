@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feeds'
 import { useGroupStore } from '@/stores/groups'
-import { useUIStore } from '@/stores/ui'
 import { useStarTagStore } from '@/stores/starTags'
 import { useNotificationStore } from '@/stores/notifications'
-import { FEED_CATEGORIES } from '@/config/constants'
 import {
   RssIcon,
   InboxIcon,
@@ -17,44 +15,16 @@ import {
   PlusIcon,
   ShieldCheckIcon,
   ChevronRightIcon,
-  CpuChipIcon,
-  BeakerIcon,
-  BriefcaseIcon,
-  BanknotesIcon,
-  BuildingLibraryIcon,
-  GlobeAltIcon,
-  FilmIcon,
-  TrophyIcon,
-  HeartIcon,
-  CakeIcon,
-  GlobeAmericasIcon,
-  AcademicCapIcon,
-  SwatchIcon,
-  PuzzlePieceIcon,
-  MusicalNoteIcon,
-  CameraIcon,
-  CodeBracketIcon,
-  SparklesIcon,
-  CommandLineIcon,
-  FaceSmileIcon,
-  MicrophoneIcon,
-  VideoCameraIcon,
-  PencilSquareIcon,
-  TagIcon,
   EllipsisVerticalIcon,
 } from '@heroicons/vue/24/outline'
 import SidebarFeedItem from '@/components/sidebar/SidebarFeedItem.vue'
 import SidebarGroupItem from '@/components/sidebar/SidebarGroupItem.vue'
-import SidebarCategoryItem from '@/components/sidebar/SidebarCategoryItem.vue'
 import AddFeedDialog from '@/components/sidebar/AddFeedDialog.vue'
-import type { Component } from 'vue'
 
 const route = useRoute()
-const router = useRouter()
 const authStore = useAuthStore()
 const feedStore = useFeedStore()
 const groupStore = useGroupStore()
-const ui = useUIStore()
 const starTagStore = useStarTagStore()
 const notifications = useNotificationStore()
 
@@ -65,16 +35,10 @@ const createGroupInput = ref<HTMLInputElement | null>(null)
 
 // Section collapse state (persisted)
 const groupsSectionOpen = ref(localStorage.getItem('acta_groups_section') !== 'collapsed')
-const categoriesSectionOpen = ref(localStorage.getItem('acta_categories_section') !== 'collapsed')
 
 function toggleGroupsSection() {
   groupsSectionOpen.value = !groupsSectionOpen.value
   localStorage.setItem('acta_groups_section', groupsSectionOpen.value ? 'open' : 'collapsed')
-}
-
-function toggleCategoriesSection() {
-  categoriesSectionOpen.value = !categoriesSectionOpen.value
-  localStorage.setItem('acta_categories_section', categoriesSectionOpen.value ? 'open' : 'collapsed')
 }
 
 async function openCreateGroup() {
@@ -117,64 +81,24 @@ watch(
 
 const totalUnread = computed(() => feedStore.totalUnread)
 
-const iconMap: Record<string, Component> = {
-  CpuChipIcon,
-  BeakerIcon,
-  BriefcaseIcon,
-  BanknotesIcon,
-  BuildingLibraryIcon,
-  GlobeAltIcon,
-  FilmIcon,
-  TrophyIcon,
-  HeartIcon,
-  CakeIcon,
-  GlobeAmericasIcon,
-  AcademicCapIcon,
-  SwatchIcon,
-  PuzzlePieceIcon,
-  MusicalNoteIcon,
-  CameraIcon,
-  CodeBracketIcon,
-  ShieldCheckIcon,
-  SparklesIcon,
-  CommandLineIcon,
-  FaceSmileIcon,
-  MicrophoneIcon,
-  VideoCameraIcon,
-  PencilSquareIcon,
-  TagIcon,
-}
-
-const categoryMeta = computed(() => {
-  const map = new Map<string, { label: string; icon: Component }>()
-  for (const cat of FEED_CATEGORIES) {
-    map.set(cat.value, {
-      label: cat.label,
-      icon: iconMap[cat.icon] || TagIcon,
+/** Feeds not belonging to any group, sorted alphabetically. */
+const ungroupedFeeds = computed(() => {
+  const grouped = groupStore.allGroupedFeedIds
+  return feedStore.feeds
+    .filter((f) => !grouped.has(f.id))
+    .sort((a, b) => {
+      const aTitle = (a.custom_title || a.title || '').toLowerCase()
+      const bTitle = (b.custom_title || b.title || '').toLowerCase()
+      return aTitle.localeCompare(bTitle)
     })
-  }
-  return map
 })
 
 function isActive(name: string) {
   return route.name === name
 }
 
-function isCategoryActive(category: string) {
-  return route.name === 'category-entries' && route.params.category === category
-}
-
 function isStarTagActive(tagId: string) {
   return route.name === 'star-tag-entries' && route.params.starTagId === tagId
-}
-
-function onCategoryClick(category: string) {
-  router.push({ name: 'category-entries', params: { category } })
-  feedStore.toggleCategory(category)
-}
-
-function categoryUnread(category: string): number {
-  return feedStore.categoryUnreadCounts.get(category) ?? 0
 }
 </script>
 
@@ -313,16 +237,20 @@ function categoryUnread(category: string): number {
               :class="{ 'rotate-90': groupsSectionOpen }"
               aria-hidden="true"
             />
-            Groups
+            Feeds
           </button>
-          <button
-            class="rounded p-0.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
-            :class="{ 'invisible': !groupsSectionOpen || showCreateGroup }"
-            aria-label="Create group"
-            @click="openCreateGroup"
-          >
-            <PlusIcon class="h-4 w-4" />
-          </button>
+          <div class="relative group/tip" :class="{ 'invisible': !groupsSectionOpen || showCreateGroup }">
+            <button
+              class="rounded p-0.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
+              aria-label="Add new group"
+              @click="openCreateGroup"
+            >
+              <PlusIcon class="h-4 w-4" />
+            </button>
+            <span class="pointer-events-none absolute right-full top-1/2 z-50 mr-1.5 -translate-y-1/2 whitespace-nowrap rounded-md bg-bg-primary px-2.5 py-1 text-xs font-medium text-text-primary shadow-lg ring-1 ring-border hidden group-hover/tip:block">
+              Add New Group
+            </span>
+          </div>
         </div>
 
         <template v-if="groupsSectionOpen">
@@ -367,46 +295,12 @@ function categoryUnread(category: string): number {
               />
             </div>
           </div>
-        </template>
-      </div>
-
-      <!-- Categories -->
-      <div v-if="feedStore.usedCategories.length > 0" class="pt-4">
-        <div class="flex items-center px-3 pb-1">
-          <button
-            class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-text-muted hover:text-text-primary"
-            :aria-expanded="categoriesSectionOpen"
-            @click="toggleCategoriesSection"
-          >
-            <ChevronRightIcon
-              class="h-3 w-3 transition-transform"
-              :class="{ 'rotate-90': categoriesSectionOpen }"
-              aria-hidden="true"
-            />
-            Categories
-          </button>
-        </div>
-
-        <template v-if="categoriesSectionOpen">
-          <div v-for="cat in feedStore.usedCategories" :key="cat" class="space-y-0.5">
-            <SidebarCategoryItem
-              :category="cat"
-              :label="categoryMeta.get(cat)?.label ?? cat"
-              :icon="categoryMeta.get(cat)?.icon ?? TagIcon"
-              :unread-count="categoryUnread(cat)"
-              :is-active="isCategoryActive(cat)"
-              :is-expanded="feedStore.expandedCategories.has(cat)"
-              @click="onCategoryClick(cat)"
-            />
-            <!-- Category feeds (collapsible) -->
-            <div v-show="feedStore.expandedCategories.has(cat)" role="group" :aria-label="categoryMeta.get(cat)?.label + ' feeds'" class="pl-4">
-              <SidebarFeedItem
-                v-for="feed in feedStore.feedsByCategory.get(cat) || []"
-                :key="feed.id"
-                :feed="feed"
-              />
-            </div>
-          </div>
+          <!-- Ungrouped feeds -->
+          <SidebarFeedItem
+            v-for="feed in ungroupedFeeds"
+            :key="feed.id"
+            :feed="feed"
+          />
         </template>
       </div>
     </nav>

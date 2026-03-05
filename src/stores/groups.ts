@@ -34,6 +34,15 @@ export const useGroupStore = defineStore('groups', () => {
     return (groupId: string): string[] => groupFeeds.value.get(groupId) ?? []
   })
 
+  /** Set of all feed IDs that belong to at least one group. */
+  const allGroupedFeedIds = computed(() => {
+    const set = new Set<string>()
+    for (const feedIds of groupFeeds.value.values()) {
+      for (const id of feedIds) set.add(id)
+    }
+    return set
+  })
+
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
@@ -265,6 +274,7 @@ export const useGroupStore = defineStore('groups', () => {
     sortedGroups,
     groupById,
     feedsByGroup,
+    allGroupedFeedIds,
     // Actions
     fetchGroups,
     createGroup,

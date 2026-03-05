@@ -2,7 +2,6 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
 import type { SubscribedFeed } from '@/types/models'
-import { FEED_CATEGORIES } from '@/config/constants'
 import { useAuthStore } from './auth'
 
 const _ta = document.createElement('textarea')
@@ -30,24 +29,6 @@ export const useFeedStore = defineStore('feeds', () => {
       feeds.value.find((f) => f.id === id)
   })
 
-  /** Map of category value -> SubscribedFeed[] grouped by the feed's category. */
-  const feedsByCategory = computed(() => {
-    const map = new Map<string, SubscribedFeed[]>()
-    for (const feed of feeds.value) {
-      const cat = feed.category || 'other'
-      const existing = map.get(cat) ?? []
-      existing.push(feed)
-      map.set(cat, existing)
-    }
-    return map
-  })
-
-  /** Sorted list of category values that have at least one subscribed feed. */
-  const usedCategories = computed(() => {
-    const used = new Set(feeds.value.map((f) => f.category || 'other'))
-    return FEED_CATEGORIES.filter((c) => used.has(c.value)).map((c) => c.value)
-  })
-
   /** Total unread count across all feeds. */
   const totalUnread = computed(() => {
     return feeds.value.reduce((sum, f) => sum + f.unread_count, 0)
@@ -57,12 +38,6 @@ export const useFeedStore = defineStore('feeds', () => {
   const favoriteFeeds = computed(() => {
     return feeds.value.filter((f) => f.is_favorite)
   })
-
-  /** Category unread counts from RPC. */
-  const categoryUnreadCounts = ref<Map<string, number>>(new Map())
-
-  /** Which categories are expanded in the sidebar. */
-  const expandedCategories = ref<Set<string>>(new Set())
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -113,21 +88,7 @@ export const useFeedStore = defineStore('feeds', () => {
         (favorites ?? []).map((f: { feed_id: string }) => f.feed_id),
       )
 
-      // 4. Category unread counts
-      const { data: catCounts, error: catError } = await supabase.rpc(
-        'get_category_unread_counts',
-        { p_user_id: userId },
-      )
-
-      if (!catError && catCounts) {
-        const catMap = new Map<string, number>()
-        for (const row of catCounts as { category: string; unread_count: number }[]) {
-          catMap.set(row.category, row.unread_count)
-        }
-        categoryUnreadCounts.value = catMap
-      }
-
-      // 5. Assemble SubscribedFeed[]
+      // 4. Assemble SubscribedFeed[]
       feeds.value = (subscriptions ?? []).map((sub: Record<string, unknown>) => {
         const feed = sub.feeds as Record<string, unknown>
         const feedId = sub.feed_id as string
@@ -235,65 +196,13 @@ export const useFeedStore = defineStore('feeds', () => {
     }
   }
 
-  /**
-   * Optimistically update the category unread count for the category that
-   * the given feed belongs to.
-   */
-  function updateCategoryUnreadCount(feedId: string, delta: number): void {
-    const feed = feeds.value.find((f) => f.id === feedId)
-    if (!feed) return
-    const cat = feed.category || 'other'
-    const current = categoryUnreadCounts.value.get(cat) ?? 0
-    categoryUnreadCounts.value.set(cat, Math.max(0, current + delta))
-  }
-
-  /**
-   * Toggle a category's expanded/collapsed state in the sidebar.
-   */
-  function toggleCategory(category: string): void {
-    if (expandedCategories.value.has(category)) {
-      expandedCategories.value.delete(category)
-    } else {
-      expandedCategories.value.add(category)
-    }
-  }
-
-  /**
-   * Fetch category unread counts from the RPC.
-   */
-  async function fetchCategoryUnreadCounts(): Promise<void> {
-    try {
-      const authStore = useAuthStore()
-      const { data, error: rpcError } = await supabase.rpc(
-        'get_category_unread_counts',
-        { p_user_id: authStore.user!.id },
-      )
-
-      if (rpcError) throw rpcError
-
-      const catMap = new Map<string, number>()
-      if (data) {
-        for (const row of data as { category: string; unread_count: number }[]) {
-          catMap.set(row.category, row.unread_count)
-        }
-      }
-      categoryUnreadCounts.value = catMap
-    } catch (err: unknown) {
-      console.error('Failed to fetch category unread counts:', err)
-    }
-  }
-
   return {
     // State
     feeds,
     loading,
     error,
-    categoryUnreadCounts,
-    expandedCategories,
     // Getters
     feedById,
-    feedsByCategory,
-    usedCategories,
     totalUnread,
     favoriteFeeds,
     // Actions
@@ -302,8 +211,5 @@ export const useFeedStore = defineStore('feeds', () => {
     unsubscribeFeed,
     toggleFavorite,
     updateUnreadCount,
-    updateCategoryUnreadCount,
-    toggleCategory,
-    fetchCategoryUnreadCounts,
   }
 })
