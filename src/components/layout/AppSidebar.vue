@@ -225,7 +225,8 @@ function isStarTagActive(tagId: string) {
             <span class="flex-1 truncate">{{ tag.name }}</span>
             <span
               v-if="(tag.unread_count ?? 0) > 0"
-              class="ml-auto rounded-full bg-badge/10 px-2 py-0.5 text-xs font-medium text-badge"
+              class="ml-auto rounded-full bg-badge/10 px-2 py-0.5 text-xs font-medium text-badge transition-opacity group-hover/star-tag:opacity-0"
+              :class="{ 'opacity-0': starTagMenuOpenId === tag.id }"
             >
               {{ (tag.unread_count ?? 0) > 999 ? '999+' : tag.unread_count }}
             </span>

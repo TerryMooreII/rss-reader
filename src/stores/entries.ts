@@ -512,19 +512,20 @@ export const useEntryStore = defineStore('entries', () => {
       if (rpcError) throw rpcError
 
       const now = new Date().toISOString()
-      const feedStore = useFeedStore()
-      const groupStore = useGroupStore()
-
       for (const entry of entries.value) {
         if (!entry.read_at) {
-          feedStore.updateUnreadCount(entry.feed_id, -1)
-              groupStore.updateUnreadCountForFeed(entry.feed_id, -1)
           entry.read_at = now
         }
       }
 
-      // Re-fetch the current view to reflect server state
-      await fetchEntries(filter.value)
+      // Re-fetch everything to reflect server state
+      const feedStore = useFeedStore()
+      const groupStore = useGroupStore()
+      await Promise.all([
+        fetchEntries(filter.value),
+        feedStore.fetchFeeds(),
+        groupStore.fetchGroups(),
+      ])
     } catch (err: unknown) {
       error.value =
         err instanceof Error ? err.message : 'Failed to mark all entries as read'
