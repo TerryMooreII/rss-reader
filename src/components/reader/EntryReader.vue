@@ -220,6 +220,17 @@ function openExternal() {
           >
             Read full article &rarr;
           </a>
+          <template v-if="ui.showArchiveLinks">
+            <span class="mx-2 text-border">|</span>
+            <a
+              :href="`https://archive.ph/${entry.url}`"
+              :target="ui.openLinksInNewTab ? '_blank' : undefined"
+              rel="noopener noreferrer"
+              class="text-sm font-medium text-accent hover:underline"
+            >
+              Read with Archive.ph &rarr;
+            </a>
+          </template>
         </div>
       </article>
     </div>

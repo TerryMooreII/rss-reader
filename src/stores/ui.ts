@@ -20,6 +20,7 @@ const LS = {
   entriesPerPage: 'acta:entriesPerPage',
   markReadOnScroll: 'acta:markReadOnScroll',
   showImages: 'acta:showImages',
+  showArchiveLinks: 'acta:showArchiveLinks',
   openLinksInNewTab: 'acta:openLinksInNewTab',
   defaultSortOrder: 'acta:defaultSortOrder',
   notifyNewEntries: 'acta:notifyNewEntries',
@@ -52,6 +53,7 @@ export const useUIStore = defineStore('ui', () => {
   const entriesPerPage = ref<number>(loadFromStorage<number>(LS.entriesPerPage, 25))
   const markReadOnScroll = ref<boolean>(loadFromStorage<boolean>(LS.markReadOnScroll, true))
   const showImages = ref<boolean>(loadFromStorage<boolean>(LS.showImages, true))
+  const showArchiveLinks = ref<boolean>(loadFromStorage<boolean>(LS.showArchiveLinks, false))
   const openLinksInNewTab = ref<boolean>(loadFromStorage<boolean>(LS.openLinksInNewTab, true))
   const defaultSortOrder = ref<SortOrder>(
     loadFromStorage<SortOrder>(LS.defaultSortOrder, 'newest_first'),
@@ -96,6 +98,7 @@ export const useUIStore = defineStore('ui', () => {
       entries_per_page: entriesPerPage.value,
       mark_read_on_scroll: markReadOnScroll.value,
       show_images: showImages.value,
+      show_archive_links: showArchiveLinks.value,
       open_links_in_new_tab: openLinksInNewTab.value,
       default_sort_order: defaultSortOrder.value,
       notify_new_entries: notifyNewEntries.value,
@@ -135,6 +138,7 @@ export const useUIStore = defineStore('ui', () => {
     { ref: entriesPerPage, key: LS.entriesPerPage },
     { ref: markReadOnScroll, key: LS.markReadOnScroll },
     { ref: showImages, key: LS.showImages },
+    { ref: showArchiveLinks, key: LS.showArchiveLinks },
     { ref: openLinksInNewTab, key: LS.openLinksInNewTab },
     { ref: defaultSortOrder, key: LS.defaultSortOrder },
     { ref: notifyNewEntries, key: LS.notifyNewEntries },
@@ -209,6 +213,7 @@ export const useUIStore = defineStore('ui', () => {
       entriesPerPage.value = data.entries_per_page ?? 25
       markReadOnScroll.value = data.mark_read_on_scroll ?? true
       showImages.value = data.show_images ?? true
+      showArchiveLinks.value = data.show_archive_links ?? false
       openLinksInNewTab.value = data.open_links_in_new_tab ?? true
       defaultSortOrder.value = (data.default_sort_order as SortOrder) || 'newest_first'
       notifyNewEntries.value = data.notify_new_entries ?? false
@@ -316,6 +321,7 @@ export const useUIStore = defineStore('ui', () => {
     entriesPerPage,
     markReadOnScroll,
     showImages,
+    showArchiveLinks,
     openLinksInNewTab,
     defaultSortOrder,
     notifyNewEntries,

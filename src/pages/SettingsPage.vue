@@ -20,7 +20,6 @@ const router = useRouter()
 const tabs = [
   { id: 'general', label: 'General' },
   { id: 'account', label: 'Account' },
-  { id: 'notifications', label: 'Notifications' },
   { id: 'groups', label: 'Groups' },
   { id: 'filters', label: 'Filters' },
   { id: 'tags', label: 'Tags' },
@@ -281,6 +280,11 @@ const shortcuts = [
         <label class="flex items-center gap-3 cursor-pointer">
           <input v-model="ui.showImages" type="checkbox" class="rounded border-border" />
           <span class="text-sm text-text-primary">Show images in entries</span>
+        </label>
+
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input v-model="ui.showArchiveLinks" type="checkbox" class="rounded border-border" />
+          <span class="text-sm text-text-primary">Show Archive.ph links on articles</span>
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
