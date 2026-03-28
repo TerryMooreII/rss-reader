@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feeds'
 import { useGroupStore } from '@/stores/groups'
 import { useStarTagStore } from '@/stores/starTags'
+import { useEntryStore } from '@/stores/entries'
 import { useNotificationStore } from '@/stores/notifications'
 import {
   RssIcon,
@@ -26,12 +27,43 @@ const authStore = useAuthStore()
 const feedStore = useFeedStore()
 const groupStore = useGroupStore()
 const starTagStore = useStarTagStore()
+const entryStore = useEntryStore()
 const notifications = useNotificationStore()
 
 const showAddFeed = ref(false)
 const showCreateGroup = ref(false)
 const newGroupName = ref('')
 const createGroupInput = ref<HTMLInputElement | null>(null)
+
+// Star tag menu
+const starTagMenuOpenId = ref<string | null>(null)
+const confirmUnstarTagId = ref<string | null>(null)
+
+function toggleStarTagMenu(tagId: string) {
+  starTagMenuOpenId.value = starTagMenuOpenId.value === tagId ? null : tagId
+  confirmUnstarTagId.value = null
+}
+
+async function unstarAllInTag(tagId: string) {
+  await entryStore.unstarByTag(tagId)
+  starTagMenuOpenId.value = null
+  confirmUnstarTagId.value = null
+  await starTagStore.fetchTags()
+  notifications.success('All items unstarred')
+}
+
+function onStarTagMenuOutsideClick(e: MouseEvent) {
+  if (!starTagMenuOpenId.value) return
+  const target = e.target as HTMLElement
+  if (target.closest('[data-star-tag-menu]')) return
+  starTagMenuOpenId.value = null
+  confirmUnstarTagId.value = null
+}
+
+document.addEventListener('click', onStarTagMenuOutsideClick)
+onUnmounted(() => {
+  document.removeEventListener('click', onStarTagMenuOutsideClick)
+})
 
 // Section collapse state (persisted)
 const groupsSectionOpen = ref(localStorage.getItem('acta_groups_section') !== 'collapsed')
@@ -178,22 +210,79 @@ function isStarTagActive(tagId: string) {
         v-if="starTagStore.expandedStarred && starTagStore.sortedTags.length > 0"
         class="pl-4 space-y-0.5"
       >
-        <RouterLink
+        <div
           v-for="tag in starTagStore.sortedTags"
           :key="tag.id"
-          :to="`/app/starred/tag/${tag.id}`"
-          :class="isStarTagActive(tag.id) ? 'sidebar-item-active' : 'sidebar-item'"
-          :aria-current="isStarTagActive(tag.id) ? 'page' : undefined"
+          class="group/star-tag relative flex items-center"
         >
-          <StarIcon class="h-4 w-4 shrink-0 text-star" />
-          <span class="flex-1 truncate">{{ tag.name }}</span>
-          <span
-            v-if="(tag.unread_count ?? 0) > 0"
-            class="ml-auto rounded-full bg-badge/10 px-2 py-0.5 text-xs font-medium text-badge"
+          <RouterLink
+            :to="`/app/starred/tag/${tag.id}`"
+            class="flex-1"
+            :class="isStarTagActive(tag.id) ? 'sidebar-item-active' : 'sidebar-item'"
+            :aria-current="isStarTagActive(tag.id) ? 'page' : undefined"
           >
-            {{ (tag.unread_count ?? 0) > 999 ? '999+' : tag.unread_count }}
-          </span>
-        </RouterLink>
+            <StarIcon class="h-4 w-4 shrink-0 text-star" />
+            <span class="flex-1 truncate">{{ tag.name }}</span>
+            <span
+              v-if="(tag.unread_count ?? 0) > 0"
+              class="ml-auto rounded-full bg-badge/10 px-2 py-0.5 text-xs font-medium text-badge"
+            >
+              {{ (tag.unread_count ?? 0) > 999 ? '999+' : tag.unread_count }}
+            </span>
+          </RouterLink>
+          <button
+            data-star-tag-menu
+            class="absolute right-1 rounded p-1 text-text-muted opacity-0 hover:bg-bg-hover hover:text-text-primary group-hover/star-tag:opacity-100 transition-opacity"
+            :class="{ 'opacity-100': starTagMenuOpenId === tag.id }"
+            aria-label="Star tag options"
+            @click.stop="toggleStarTagMenu(tag.id)"
+          >
+            <EllipsisVerticalIcon class="h-4 w-4" />
+          </button>
+
+          <!-- Dropdown menu -->
+          <Transition
+            enter-active-class="transition duration-100 ease-out"
+            enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition duration-75 ease-in"
+            leave-from-class="opacity-100 scale-100"
+            leave-to-class="opacity-0 scale-95"
+          >
+            <div
+              v-if="starTagMenuOpenId === tag.id"
+              data-star-tag-menu
+              class="absolute right-2 top-full z-50 mt-1 w-48 rounded-lg border border-border bg-bg-primary py-1 shadow-lg"
+            >
+              <template v-if="confirmUnstarTagId === tag.id">
+                <p class="px-3 py-2 text-xs text-text-muted">Unstar all items in "{{ tag.name }}"?</p>
+                <div class="flex gap-1 px-2 pb-1">
+                  <button
+                    class="flex-1 rounded px-2 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-hover"
+                    @click.stop="confirmUnstarTagId = null"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    class="flex-1 rounded px-2 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10"
+                    @click.stop="unstarAllInTag(tag.id)"
+                  >
+                    Unstar All
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <button
+                  class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
+                  @click.stop="confirmUnstarTagId = tag.id"
+                >
+                  <StarIcon class="h-4 w-4" />
+                  Unstar all
+                </button>
+              </template>
+            </div>
+          </Transition>
+        </div>
       </div>
 
       <RouterLink

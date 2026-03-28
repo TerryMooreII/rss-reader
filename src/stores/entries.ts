@@ -453,6 +453,31 @@ export const useEntryStore = defineStore('entries', () => {
     }
   }
 
+  async function unstarByTag(starTagId: string): Promise<void> {
+    error.value = null
+    try {
+      const userId = _getUserId()
+      const { error: updateError } = await supabase
+        .from('user_entry_status')
+        .update({ starred_at: null, star_tag_id: null })
+        .eq('user_id', userId)
+        .eq('star_tag_id', starTagId)
+        .not('starred_at', 'is', null)
+
+      if (updateError) throw updateError
+
+      // Update local entries that had this tag
+      for (const entry of entries.value) {
+        if (entry.star_tag_id === starTagId && entry.starred_at) {
+          entry.starred_at = null
+          entry.star_tag_id = null
+        }
+      }
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to unstar entries'
+    }
+  }
+
   async function markAllRead(): Promise<void> {
     if (filter.value.type === 'search') return
 
@@ -717,6 +742,7 @@ export const useEntryStore = defineStore('entries', () => {
     markGroupAsRead,
     markCategoryAsRead,
     silentRefresh,
+    unstarByTag,
     selectEntry,
     selectNext,
     selectPrevious,

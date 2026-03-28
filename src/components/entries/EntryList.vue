@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
+import { ArrowUpIcon } from '@heroicons/vue/20/solid'
 import EntryListItem from './EntryListItem.vue'
 import EntryListItemCozy from './EntryListItemCozy.vue'
 import EntryListItemFeed from './EntryListItemFeed.vue'
@@ -56,10 +57,12 @@ function setupObserver() {
 
 onMounted(() => {
   setupObserver()
+  scrollContainer.value?.addEventListener('scroll', handleScroll, { passive: true })
 })
 
 onUnmounted(() => {
   observer?.disconnect()
+  scrollContainer.value?.removeEventListener('scroll', handleScroll)
 })
 
 // Re-observe when entries change (sentinel might have moved)
@@ -91,6 +94,20 @@ async function handleRefresh() {
   } finally {
     refreshing.value = false
   }
+}
+
+// Scroll-to-top button visibility
+const showScrollTop = ref(false)
+
+function handleScroll() {
+  if (scrollContainer.value) {
+    showScrollTop.value = scrollContainer.value.scrollTop > 300
+  }
+}
+
+async function scrollToTopAndRefresh() {
+  scrollContainer.value?.scrollTo({ top: 0 })
+  await handleRefresh()
 }
 
 function searchAllFeeds() {
@@ -238,6 +255,27 @@ watch(() => entryStore.filter, () => {
       <div class="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
       <span class="sr-only">Loading more entries</span>
     </div>
+
+    <!-- Scroll to top + refresh button -->
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="opacity-0 translate-y-2"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition duration-150 ease-in"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 translate-y-2"
+    >
+      <button
+        v-if="showScrollTop"
+        class="sticky bottom-20 md:bottom-4 left-full -translate-x-6 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-accent text-white shadow-lg hover:bg-accent/90 transition-colors"
+        :class="{ 'animate-spin': refreshing }"
+        :disabled="refreshing"
+        aria-label="Scroll to top and refresh"
+        @click="scrollToTopAndRefresh"
+      >
+        <ArrowUpIcon class="h-5 w-5" />
+      </button>
+    </Transition>
 
     <!-- Pagination controls -->
     <div
