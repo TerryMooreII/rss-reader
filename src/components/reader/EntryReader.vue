@@ -190,7 +190,7 @@ function openExternal() {
 
         <!-- Featured image (hidden when YouTube video detected) -->
         <img
-          v-if="entry.image_url && media?.type !== 'youtube'"
+          v-if="entry.image_url && ui.showImages && media?.type !== 'youtube'"
           :src="entry.image_url"
           :alt="entry.title || ''"
           class="w-full rounded-lg mb-6"

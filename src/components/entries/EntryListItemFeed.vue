@@ -178,7 +178,7 @@ function collapse(e: Event) {
       <!-- Collapsed: title + summary with thumbnail wrap -->
       <div v-if="!expanded" class="overflow-hidden max-h-40">
         <img
-          v-if="entry.image_url"
+          v-if="entry.image_url && ui.showImages"
           :src="entry.image_url"
           :alt="entry.title || ''"
           class="h-24 w-32 rounded-lg object-cover float-right ml-3 mb-1"
@@ -203,7 +203,7 @@ function collapse(e: Event) {
         </h3>
         <!-- Featured image (hidden when YouTube video detected) -->
         <img
-          v-if="entry.image_url && media?.type !== 'youtube'"
+          v-if="entry.image_url && ui.showImages && media?.type !== 'youtube'"
           :src="entry.image_url"
           :alt="entry.title || ''"
           class="w-full rounded-lg mb-4"
