@@ -18,11 +18,14 @@ export interface UserSettings {
   entries_per_page: number
   mark_read_on_scroll: boolean
   show_images: boolean
+  show_archive_links: boolean
   open_links_in_new_tab: boolean
   notify_new_entries: boolean
   notify_email: boolean
   default_sort_order: 'newest_first' | 'oldest_first'
   pagination_mode: 'infinite' | 'paginated'
+  show_unread_only: boolean
+  font_size: string
 }
 
 export interface Feed {
