@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
@@ -29,13 +29,37 @@ const component = computed(() => {
   return EntryListItemCozy
 })
 
-function handleEntryClick(entryId: string) {
-  if (isFeedMode.value) {
-    // Toggle expand/collapse in feed mode
-    expandedEntryId.value = expandedEntryId.value === entryId ? null : entryId
-  } else {
+async function handleEntryClick(entryId: string) {
+  if (!isFeedMode.value) {
     entryStore.selectEntry(entryId)
+    return
   }
+
+  const previousId = expandedEntryId.value
+  const isSameEntry = previousId === entryId
+  const hasPreviousExpanded = previousId !== null && !isSameEntry
+
+  if (hasPreviousExpanded && scrollContainer.value) {
+    const clickedEl = scrollContainer.value.querySelector<HTMLElement>(
+      `[data-entry-id="${entryId}"]`,
+    )
+    const beforeTop = clickedEl?.getBoundingClientRect().top ?? null
+
+    expandedEntryId.value = entryId
+
+    await nextTick()
+
+    if (clickedEl && beforeTop !== null) {
+      const afterTop = clickedEl.getBoundingClientRect().top
+      const delta = afterTop - beforeTop
+      if (delta !== 0) {
+        scrollContainer.value.scrollTop += delta
+      }
+    }
+    return
+  }
+
+  expandedEntryId.value = isSameEntry ? null : entryId
 }
 
 function handleIntersect(entries: IntersectionObserverEntry[]) {
