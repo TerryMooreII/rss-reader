@@ -267,7 +267,7 @@ watch(() => entryStore.filter, () => {
     >
       <button
         v-if="showScrollTop"
-        class="sticky bottom-20 md:bottom-4 left-full -translate-x-6 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-accent text-white shadow-lg hover:bg-accent/90 transition-colors"
+        class="sticky bottom-16 md:bottom-4 left-full -translate-x-6 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-accent text-white shadow-lg hover:bg-accent/90 transition-colors"
         :class="{ 'animate-spin': refreshing }"
         :disabled="refreshing"
         aria-label="Scroll to top and refresh"

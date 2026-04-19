@@ -228,7 +228,7 @@ async function refetchAllData() {
 
 <template>
   <a href="#main-content" class="skip-link">Skip to content</a>
-  <div class="flex h-screen overflow-hidden bg-bg-primary text-text-primary">
+  <div class="flex h-dvh overflow-hidden bg-bg-primary text-text-primary">
     <!-- Sidebar overlay on mobile -->
     <div
       v-if="ui.sidebarOpen && isMobile"
