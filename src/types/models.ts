@@ -95,11 +95,9 @@ export interface Entry {
   title: string | null
   author: string | null
   content_html: string | null
-  content_text: string | null
   summary: string | null
   image_url: string | null
-  published_at: string | null
-  created_at: string
+  published_at: string
   read_at: string | null
   starred_at: string | null
   star_tag_id: string | null
