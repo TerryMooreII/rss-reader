@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
+import { errorMessage } from '@/composables/useAsyncAction'
+import FormField from '@/components/ui/FormField.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -19,8 +21,8 @@ async function handleLogin() {
     await authStore.login(email.value, password.value)
     const redirect = (route.query.redirect as string) || '/app/all'
     router.push(redirect)
-  } catch (e: any) {
-    notifications.error(e.message || 'Failed to sign in')
+  } catch (e: unknown) {
+    notifications.error(errorMessage(e, 'Failed to sign in'))
   } finally {
     loading.value = false
   }
@@ -31,22 +33,14 @@ async function handleLogin() {
   <div>
     <h2 class="text-xl font-bold text-text-primary mb-6">Sign in to Acta</h2>
 
-    <form @submit.prevent="handleLogin" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-text-secondary mb-1">Email</label>
+    <form class="space-y-4" @submit.prevent="handleLogin">
+      <FormField label="Email">
         <input v-model="email" type="email" class="input" placeholder="you@example.com" required />
-      </div>
+      </FormField>
 
-      <div>
-        <label class="block text-sm font-medium text-text-secondary mb-1">Password</label>
-        <input
-          v-model="password"
-          type="password"
-          class="input"
-          placeholder="Your password"
-          required
-        />
-      </div>
+      <FormField label="Password">
+        <input v-model="password" type="password" class="input" placeholder="Your password" required />
+      </FormField>
 
       <div class="flex items-center justify-between">
         <RouterLink to="/forgot-password" class="text-sm text-accent hover:underline">

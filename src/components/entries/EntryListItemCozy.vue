@@ -1,72 +1,33 @@
 <script setup lang="ts">
 import type { Entry } from '@/types/models'
-import { computed, ref } from 'vue'
-import { RssIcon } from '@heroicons/vue/24/outline'
+import { computed } from 'vue'
+import { formatTimeAgo, now } from '@/utils/date'
+import { truncate } from '@/utils/html'
+import FeedFavicon from '@/components/ui/FeedFavicon.vue'
 
-const props = defineProps<{
-  entry: Entry
-  selected: boolean
-}>()
-
+const props = defineProps<{ entry: Entry; selected: boolean }>()
 defineEmits<{ click: [] }>()
 
-const faviconError = ref(false)
-
-const timeAgo = computed(() => {
-  if (!props.entry.published_at) return ''
-  const now = Date.now()
-  const published = new Date(props.entry.published_at).getTime()
-  const diff = now - published
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  return `${months}mo ago`
-})
-
+const timeAgo = computed(() => formatTimeAgo(props.entry.published_at, now.value))
 const isRead = computed(() => !!props.entry.read_at)
-
-const excerpt = computed(() => {
-  let text = props.entry.summary || ''
-  if (text && (text.includes('<') || text.includes('&lt;'))) {
-    const doc = new DOMParser().parseFromString(text, 'text/html')
-    text = doc.body.textContent?.trim() || ''
-  }
-  return text.length > 150 ? text.slice(0, 150) + '...' : text
-})
+const excerpt = computed(() => truncate(props.entry.excerpt, 150))
 </script>
 
 <template>
   <article
     class="border-b px-4 py-3 cursor-pointer transition-colors outline-none overflow-hidden"
-    :class="[
-      selected ? 'bg-bg-active' : 'hover:bg-bg-hover',
-    ]"
+    :class="selected ? 'bg-bg-active' : 'hover:bg-bg-hover'"
     :aria-label="`${entry.title || 'Untitled'} from ${entry.feed_title || 'unknown feed'}${isRead ? '' : ' (unread)'}${entry.starred_at ? ' (starred)' : ''}`"
     @click="$emit('click')"
   >
     <div class="flex items-center gap-2 mb-1">
-      <img
-        v-if="entry.feed_favicon_url && !faviconError"
-        :src="entry.feed_favicon_url"
-        alt=""
-        class="h-4 w-4 shrink-0 rounded"
-        loading="lazy"
-        @error="faviconError = true"
-      />
-      <RssIcon v-else class="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+      <FeedFavicon :src="entry.feed_favicon_url" />
       <span class="text-xs text-text-muted truncate">{{ entry.feed_title }}</span>
       <span v-if="entry.starred_at" class="text-star text-xs" aria-hidden="true">&#9733;</span>
       <span class="ml-auto text-xs text-text-muted whitespace-nowrap">{{ timeAgo }}</span>
     </div>
 
-    <h3
-      class="text-sm leading-snug mb-1 line-clamp-2"
-      :class="isRead ? 'text-text-muted' : 'text-text-primary font-semibold'"
-    >
+    <h3 class="text-sm leading-snug mb-1 line-clamp-2" :class="isRead ? 'text-text-muted' : 'text-text-primary font-semibold'">
       {{ entry.title || 'Untitled' }}
     </h3>
 

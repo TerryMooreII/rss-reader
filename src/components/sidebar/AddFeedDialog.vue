@@ -1,20 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  TransitionChild,
-  TransitionRoot,
-} from '@headlessui/vue'
-import { XMarkIcon, RssIcon } from '@heroicons/vue/24/outline'
+import { RssIcon } from '@heroicons/vue/24/outline'
 import { useFeedStore } from '@/stores/feeds'
 import { useGroupStore } from '@/stores/groups'
 import { useNotificationStore } from '@/stores/notifications'
 import { FEED_CATEGORIES } from '@/config/constants'
 import { addFeed, importOPML } from '@/services/feeds.service'
 import { detectPlatformHint } from '@/utils/platformDetect'
+import { errorMessage } from '@/composables/useAsyncAction'
 import GroupSelector from '@/components/common/GroupSelector.vue'
+import BaseDialog from '@/components/ui/BaseDialog.vue'
+import FormField from '@/components/ui/FormField.vue'
+import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -31,19 +28,23 @@ const selectedGroupIds = ref<string[]>([])
 const opmlFile = ref<File | null>(null)
 const mode = ref<'url' | 'opml'>('url')
 
+const modeOptions = [
+  { value: 'url' as const, label: 'Feed URL' },
+  { value: 'opml' as const, label: 'Import OPML' },
+]
+
 const platformHint = computed(() => detectPlatformHint(feedUrl.value))
 
 watch(
   () => props.open,
   (v) => {
-    if (v) {
-      feedUrl.value = ''
-      category.value = 'other'
-      isPrivate.value = false
-      selectedGroupIds.value = []
-      opmlFile.value = null
-      mode.value = 'url'
-    }
+    if (!v) return
+    feedUrl.value = ''
+    category.value = 'other'
+    isPrivate.value = false
+    selectedGroupIds.value = []
+    opmlFile.value = null
+    mode.value = 'url'
   },
 )
 
@@ -52,28 +53,19 @@ async function handleAddFeed() {
   loading.value = true
   try {
     const result = await addFeed(feedUrl.value.trim(), category.value, isPrivate.value)
-    // Subscribe to the feed
     await feedStore.subscribeFeed(result.id)
-    // Add to selected groups
     if (selectedGroupIds.value.length > 0) {
-      await Promise.allSettled(
-        selectedGroupIds.value.map((gid) => groupStore.addFeedToGroup(gid, result.id)),
-      )
+      await Promise.allSettled(selectedGroupIds.value.map((gid) => groupStore.addFeedToGroup(gid, result.id)))
     }
     const platformName = result.platform ? ` (${result.platform})` : ''
-    const groupMsg = selectedGroupIds.value.length > 0
-      ? ` Added to ${selectedGroupIds.value.length} group(s).`
-      : ''
-    notifications.success(
-      (result.created ? `Feed added and subscribed!${platformName}` : 'Subscribed to existing feed!') + groupMsg,
-    )
+    const groupMsg = selectedGroupIds.value.length > 0 ? ` Added to ${selectedGroupIds.value.length} group(s).` : ''
+    notifications.success((result.created ? `Feed added and subscribed!${platformName}` : 'Subscribed to existing feed!') + groupMsg)
     emit('close')
-  } catch (e: any) {
-    if (e?.code === '23505' || e?.message?.includes('subscriptions_unique')) {
-      notifications.error('You are already subscribed to this feed')
-    } else {
-      notifications.error(e.message || 'Failed to add feed')
-    }
+  } catch (e: unknown) {
+    const code = typeof e === 'object' && e && 'code' in e ? (e as { code?: string }).code : undefined
+    const msg = errorMessage(e, 'Failed to add feed')
+    if (code === '23505' || msg.includes('subscriptions_unique')) notifications.error('You are already subscribed to this feed')
+    else notifications.error(msg)
   } finally {
     loading.value = false
   }
@@ -84,157 +76,64 @@ async function handleImportOPML() {
   loading.value = true
   try {
     const result = await importOPML(opmlFile.value)
-    await feedStore.fetchFeeds()
-    notifications.success(
-      `Imported ${result.feeds_added} feeds, ${result.groups_created} groups created`,
-    )
+    await Promise.all([feedStore.fetchFeeds(), groupStore.fetchGroups()])
+    notifications.success(`Imported ${result.feeds_added} feeds, ${result.groups_created} groups created`)
     emit('close')
-  } catch (e: any) {
-    notifications.error(e.message || 'Failed to import OPML')
+  } catch (e: unknown) {
+    notifications.error(errorMessage(e, 'Failed to import OPML'))
   } finally {
     loading.value = false
   }
 }
 
 function onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement
-  opmlFile.value = input.files?.[0] || null
+  opmlFile.value = (e.target as HTMLInputElement).files?.[0] || null
 }
 </script>
 
 <template>
-  <TransitionRoot :show="open" as="template">
-    <Dialog class="relative z-50" @close="$emit('close')">
-      <TransitionChild
-        enter="ease-out duration-200"
-        enter-from="opacity-0"
-        enter-to="opacity-100"
-        leave="ease-in duration-150"
-        leave-from="opacity-100"
-        leave-to="opacity-0"
-      >
-        <div class="fixed inset-0 bg-black/40" />
-      </TransitionChild>
+  <BaseDialog :open="open" title="Add Feed" @close="emit('close')">
+    <SegmentedControl v-model="mode" :options="modeOptions" size="md" class="mb-4" label="Add feed mode" />
 
-      <div class="fixed inset-0 flex items-center justify-center p-4">
-        <TransitionChild
-          enter="ease-out duration-200"
-          enter-from="opacity-0 scale-95"
-          enter-to="opacity-100 scale-100"
-          leave="ease-in duration-150"
-          leave-from="opacity-100 scale-100"
-          leave-to="opacity-0 scale-95"
-        >
-          <DialogPanel class="w-full max-w-md rounded-xl border bg-bg-primary p-6 shadow-xl">
-            <div class="flex items-center justify-between mb-4">
-              <DialogTitle class="text-lg font-semibold text-text-primary">Add Feed</DialogTitle>
-              <button class="text-text-muted hover:text-text-primary" @click="$emit('close')">
-                <XMarkIcon class="h-5 w-5" />
-              </button>
-            </div>
+    <!-- URL mode -->
+    <form v-if="mode === 'url'" class="space-y-4" @submit.prevent="handleAddFeed">
+      <FormField label="Feed URL">
+        <div class="relative">
+          <RssIcon class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+          <input v-model="feedUrl" type="url" placeholder="Paste any URL — feed, YouTube, Reddit, GitHub..." class="input pl-9" required />
+        </div>
+        <div v-if="platformHint" class="mt-1.5 flex items-center gap-1.5">
+          <span class="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">{{ platformHint.label }}</span>
+          <span class="text-xs text-text-muted">{{ platformHint.description }}</span>
+        </div>
+      </FormField>
 
-            <!-- Mode tabs -->
-            <div class="mb-4 flex rounded-lg bg-bg-secondary p-1">
-              <button
-                class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
-                :class="
-                  mode === 'url'
-                    ? 'bg-bg-primary text-text-primary shadow-sm'
-                    : 'text-text-secondary'
-                "
-                @click="mode = 'url'"
-              >
-                Feed URL
-              </button>
-              <button
-                class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
-                :class="
-                  mode === 'opml'
-                    ? 'bg-bg-primary text-text-primary shadow-sm'
-                    : 'text-text-secondary'
-                "
-                @click="mode = 'opml'"
-              >
-                Import OPML
-              </button>
-            </div>
+      <FormField label="Category">
+        <select v-model="category" class="input">
+          <option v-for="cat in FEED_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+        </select>
+      </FormField>
 
-            <!-- URL mode -->
-            <form v-if="mode === 'url'" @submit.prevent="handleAddFeed" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-text-secondary mb-1">Feed URL</label>
-                <div class="relative">
-                  <RssIcon
-                    class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
-                  />
-                  <input
-                    v-model="feedUrl"
-                    type="url"
-                    placeholder="Paste any URL — feed, YouTube, Reddit, GitHub..."
-                    class="input pl-9"
-                    required
-                  />
-                </div>
-                <!-- Platform hint -->
-                <div
-                  v-if="platformHint"
-                  class="mt-1.5 flex items-center gap-1.5"
-                >
-                  <span
-                    class="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent"
-                  >
-                    {{ platformHint.label }}
-                  </span>
-                  <span class="text-xs text-text-muted">{{ platformHint.description }}</span>
-                </div>
-              </div>
+      <label class="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+        <input v-model="isPrivate" type="checkbox" class="rounded border-border" />
+        Private feed (won't appear in Discover)
+      </label>
 
-              <div>
-                <label class="block text-sm font-medium text-text-secondary mb-1">Category</label>
-                <select v-model="category" class="input">
-                  <option v-for="cat in FEED_CATEGORIES" :key="cat.value" :value="cat.value">
-                    {{ cat.label }}
-                  </option>
-                </select>
-              </div>
+      <GroupSelector v-model="selectedGroupIds" mode="form" />
 
-              <label class="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-                <input v-model="isPrivate" type="checkbox" class="rounded border-border" />
-                Private feed (won't appear in Discover)
-              </label>
+      <button type="submit" class="btn-primary w-full" :disabled="loading || !feedUrl">
+        {{ loading && platformHint ? `Resolving ${platformHint.label}...` : loading ? 'Adding...' : 'Add Feed' }}
+      </button>
+    </form>
 
-              <GroupSelector v-model="selectedGroupIds" mode="form" />
-
-              <button type="submit" class="btn-primary w-full" :disabled="loading || !feedUrl">
-                {{ loading && platformHint ? `Resolving ${platformHint.label}...` : loading ? 'Adding...' : 'Add Feed' }}
-              </button>
-            </form>
-
-            <!-- OPML mode -->
-            <form v-else @submit.prevent="handleImportOPML" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-text-secondary mb-1"
-                  >OPML File</label
-                >
-                <input
-                  type="file"
-                  accept=".opml,.xml"
-                  class="input"
-                  @change="onFileChange"
-                />
-              </div>
-
-              <button
-                type="submit"
-                class="btn-primary w-full"
-                :disabled="loading || !opmlFile"
-              >
-                {{ loading ? 'Importing...' : 'Import Feeds' }}
-              </button>
-            </form>
-          </DialogPanel>
-        </TransitionChild>
-      </div>
-    </Dialog>
-  </TransitionRoot>
+    <!-- OPML mode -->
+    <form v-else class="space-y-4" @submit.prevent="handleImportOPML">
+      <FormField label="OPML File">
+        <input type="file" accept=".opml,.xml" class="input" @change="onFileChange" />
+      </FormField>
+      <button type="submit" class="btn-primary w-full" :disabled="loading || !opmlFile">
+        {{ loading ? 'Importing...' : 'Import Feeds' }}
+      </button>
+    </form>
+  </BaseDialog>
 </template>

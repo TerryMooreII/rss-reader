@@ -50,7 +50,7 @@ export async function safeFetch(
   if (!check.valid) throw new Error(check.error || "Invalid URL");
 
   const response = await fetch(url, {
-    headers: { "User-Agent": "Acta RSS Reader/1.0", ...(init.headers ?? {}) },
+    headers: { "User-Agent": "Acta RSS Reader/1.0", ...init.headers },
     signal: AbortSignal.timeout(init.timeoutMs ?? 15000),
     redirect: "follow",
   });

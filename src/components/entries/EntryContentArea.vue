@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useEntryStore } from '@/stores/entries'
 import { useSwipe } from '@/composables/useSwipe'
+import { useBreakpoint } from '@/composables/useBreakpoint'
 import EntryListHeader from './EntryListHeader.vue'
 import EntryList from './EntryList.vue'
 import EntryReader from '@/components/reader/EntryReader.vue'
@@ -11,6 +12,7 @@ defineProps<{ title: string }>()
 
 const ui = useUIStore()
 const entryStore = useEntryStore()
+const { isMobile } = useBreakpoint()
 
 const dragging = ref(false)
 const mobileReaderRef = ref<HTMLElement | null>(null)
@@ -23,20 +25,19 @@ useSwipe({
 
 const isFeedMode = computed(() => ui.displayMode === 'feed')
 const showReader = computed(() => ui.readerOpen && !isFeedMode.value)
+// Exactly one reader instance exists at a time: a pane on desktop, an overlay on mobile.
+const showDesktopReader = computed(() => showReader.value && !isMobile.value)
+const showMobileReader = computed(() => showReader.value && isMobile.value && !!entryStore.selectedEntry)
 
 function onPointerDown(e: PointerEvent) {
   dragging.value = true
-  const target = e.currentTarget as HTMLElement
-  target.setPointerCapture(e.pointerId)
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
 }
 
 function onPointerMove(e: PointerEvent) {
   if (!dragging.value) return
-  // Get the left edge of the flex container (the parent of the list pane)
   const container = (e.currentTarget as HTMLElement).parentElement!
-  const containerRect = container.getBoundingClientRect()
-  const newWidth = e.clientX - containerRect.left
-  ui.setListWidth(newWidth)
+  ui.setListWidth(e.clientX - container.getBoundingClientRect().left)
 }
 
 function onPointerUp() {
@@ -53,17 +54,16 @@ function onPointerUp() {
         showReader ? 'hidden md:flex border-r border-border' : 'flex-1',
         !isFeedMode ? 'border-r border-border' : '',
       ]"
-      :style="showReader ? { width: ui.listWidth + 'px' } : undefined"
+      :style="showDesktopReader ? { width: ui.listWidth + 'px' } : undefined"
     >
       <EntryListHeader :title="title" />
       <EntryList />
     </div>
 
-    <!-- Resize handle (desktop only, when reader is open, not in feed mode) -->
+    <!-- Resize handle -->
     <div
-      v-if="showReader"
-      class="hidden md:flex w-1 shrink-0 cursor-col-resize items-center justify-center
-        hover:bg-accent/20 active:bg-accent/30 transition-colors"
+      v-if="showDesktopReader"
+      class="flex w-1 shrink-0 cursor-col-resize items-center justify-center hover:bg-accent/20 active:bg-accent/30 transition-colors"
       :class="dragging ? 'bg-accent/30' : ''"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
@@ -71,19 +71,15 @@ function onPointerUp() {
       @pointercancel="onPointerUp"
     />
 
-    <!-- Reader pane (desktop, not in feed mode) -->
-    <div v-if="showReader" class="flex-1 hidden md:block min-w-0">
+    <!-- Reader pane (desktop) -->
+    <div v-if="showDesktopReader" class="flex-1 min-w-0">
       <EntryReader />
     </div>
 
-    <!-- Reader overlay (mobile, not in feed mode) -->
+    <!-- Reader overlay (mobile) -->
     <Teleport to="body">
       <Transition name="slide-right">
-        <div
-          ref="mobileReaderRef"
-          v-if="showReader && entryStore.selectedEntry"
-          class="fixed inset-0 z-50 bg-bg-primary md:hidden"
-        >
+        <div v-if="showMobileReader" ref="mobileReaderRef" class="fixed inset-0 z-50 bg-bg-primary">
           <EntryReader />
         </div>
       </Transition>

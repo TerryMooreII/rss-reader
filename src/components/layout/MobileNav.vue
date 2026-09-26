@@ -2,21 +2,19 @@
 import { RouterLink, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useFeedStore } from '@/stores/feeds'
-import {
-  InboxIcon,
-  StarIcon,
-  MagnifyingGlassIcon,
-  Cog6ToothIcon,
-  Bars3Icon,
-} from '@heroicons/vue/24/outline'
+import { InboxIcon, StarIcon, MagnifyingGlassIcon, Cog6ToothIcon, Bars3Icon } from '@heroicons/vue/24/outline'
+import UnreadBadge from '@/components/ui/UnreadBadge.vue'
 
 const route = useRoute()
 const ui = useUIStore()
 const feedStore = useFeedStore()
 
-function isActive(name: string) {
-  return route.name === name
-}
+const links = [
+  { to: '/app/all', name: 'all-entries', label: 'All', icon: InboxIcon },
+  { to: '/app/starred', name: 'starred-entries', label: 'Starred', icon: StarIcon },
+  { to: '/app/discover', name: 'discover', label: 'Discover', icon: MagnifyingGlassIcon },
+  { to: '/app/settings', name: 'settings', label: 'Settings', icon: Cog6ToothIcon },
+]
 </script>
 
 <template>
@@ -33,50 +31,22 @@ function isActive(name: string) {
       </button>
 
       <RouterLink
-        to="/app/all"
-        class="flex flex-col items-center gap-0.5 px-3 py-1 relative"
-        :class="isActive('all-entries') ? 'text-accent' : 'text-text-muted'"
-        :aria-current="isActive('all-entries') ? 'page' : undefined"
+        v-for="link in links"
+        :key="link.name"
+        :to="link.to"
+        class="relative flex flex-col items-center gap-0.5 px-3 py-1"
+        :class="route.name === link.name ? 'text-accent' : 'text-text-muted'"
+        :aria-current="route.name === link.name ? 'page' : undefined"
       >
-        <InboxIcon class="h-5 w-5" />
-        <span class="text-[10px]">All</span>
-        <span
-          v-if="feedStore.totalUnread > 0"
-          class="absolute -top-1 right-0 h-4 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold text-white"
-          :aria-label="`${feedStore.totalUnread} unread`"
-        >
-          {{ feedStore.totalUnread > 99 ? '99+' : feedStore.totalUnread }}
-        </span>
-      </RouterLink>
-
-      <RouterLink
-        to="/app/starred"
-        class="flex flex-col items-center gap-0.5 px-3 py-1"
-        :class="isActive('starred-entries') ? 'text-accent' : 'text-text-muted'"
-        :aria-current="isActive('starred-entries') ? 'page' : undefined"
-      >
-        <StarIcon class="h-5 w-5" />
-        <span class="text-[10px]">Starred</span>
-      </RouterLink>
-
-      <RouterLink
-        to="/app/discover"
-        class="flex flex-col items-center gap-0.5 px-3 py-1"
-        :class="isActive('discover') ? 'text-accent' : 'text-text-muted'"
-        :aria-current="isActive('discover') ? 'page' : undefined"
-      >
-        <MagnifyingGlassIcon class="h-5 w-5" />
-        <span class="text-[10px]">Discover</span>
-      </RouterLink>
-
-      <RouterLink
-        to="/app/settings"
-        class="flex flex-col items-center gap-0.5 px-3 py-1"
-        :class="isActive('settings') ? 'text-accent' : 'text-text-muted'"
-        :aria-current="isActive('settings') ? 'page' : undefined"
-      >
-        <Cog6ToothIcon class="h-5 w-5" />
-        <span class="text-[10px]">Settings</span>
+        <component :is="link.icon" class="h-5 w-5" />
+        <span class="text-[10px]">{{ link.label }}</span>
+        <UnreadBadge
+          v-if="link.name === 'all-entries'"
+          :count="feedStore.totalUnread"
+          :max="99"
+          variant="dot"
+          class="absolute -top-1 right-0"
+        />
       </RouterLink>
     </div>
   </nav>

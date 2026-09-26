@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useEntryStore } from '@/stores/entries'
 import { useUIStore } from '@/stores/ui'
 import { ArrowUpIcon } from '@heroicons/vue/20/solid'
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import EntryListItem from './EntryListItem.vue'
 import EntryListItemCozy from './EntryListItemCozy.vue'
 import EntryListItemFeed from './EntryListItemFeed.vue'
@@ -22,6 +23,10 @@ const expandedEntryId = ref<string | null>(null)
 const isFeedMode = computed(() => ui.displayMode === 'feed')
 const isPaginated = computed(() => ui.paginationMode === 'paginated')
 const isAllView = computed(() => entryStore.filter.type === 'all')
+const isSearch = computed(() => entryStore.filter.type === 'search')
+const isSubscribedSearch = computed(
+  () => entryStore.filter.type === 'search' && entryStore.filter.scope !== 'all',
+)
 
 const component = computed(() => {
   if (ui.displayMode === 'compact') return EntryListItem
@@ -114,7 +119,7 @@ const refreshing = ref(false)
 async function handleRefresh() {
   refreshing.value = true
   try {
-    await entryStore.fetchEntries(entryStore.filter)
+    await entryStore.refresh()
   } finally {
     refreshing.value = false
   }
@@ -138,7 +143,7 @@ function searchAllFeeds() {
   ui.setSearchScope('all')
   router.push({
     name: 'search-entries',
-    query: { q: entryStore.filter.query, scope: 'all' },
+    query: { q: entryStore.searchQuery, scope: 'all' },
   })
 }
 
@@ -160,16 +165,16 @@ watch(() => entryStore.filter, () => {
       class="flex flex-col items-center justify-center py-20 text-center"
     >
       <p class="text-lg font-medium text-text-secondary">
-        {{ entryStore.filter.type === 'search' ? 'No results found' : 'No entries found' }}
+        {{ isSearch ? 'No results found' : 'No entries found' }}
       </p>
-      <p v-if="entryStore.filter.type === 'search' && entryStore.filter.scope !== 'all'" class="mt-1 text-sm text-text-muted">
-        No results for "{{ entryStore.filter.query }}".
+      <p v-if="isSubscribedSearch" class="mt-1 text-sm text-text-muted">
+        No results for "{{ entryStore.searchQuery }}".
         Try searching
         <button class="text-accent hover:underline" @click="searchAllFeeds">all feeds</button>
         instead.
       </p>
-      <p v-else-if="entryStore.filter.type === 'search'" class="mt-1 text-sm text-text-muted">
-        No results for "{{ entryStore.filter.query }}".
+      <p v-else-if="isSearch" class="mt-1 text-sm text-text-muted">
+        No results for "{{ entryStore.searchQuery }}".
         Try different keywords, quotes for exact phrases, or OR between words.
       </p>
       <p v-else-if="entryStore.filter.unreadOnly && isAllView" class="mt-1 text-sm text-text-muted">
@@ -276,7 +281,7 @@ watch(() => entryStore.filter, () => {
       role="status"
       aria-live="polite"
     >
-      <div class="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      <LoadingSpinner size="md" class="text-accent" />
       <span class="sr-only">Loading more entries</span>
     </div>
 

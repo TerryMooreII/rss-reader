@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
+import { errorMessage } from '@/composables/useAsyncAction'
+import FormField from '@/components/ui/FormField.vue'
 
 const authStore = useAuthStore()
 const notifications = useNotificationStore()
@@ -17,8 +19,8 @@ async function handleReset() {
     await authStore.resetPassword(email.value)
     sent.value = true
     notifications.success('Check your email for reset instructions')
-  } catch (e: any) {
-    notifications.error(e.message || 'Failed to send reset email')
+  } catch (e: unknown) {
+    notifications.error(errorMessage(e, 'Failed to send reset email'))
   } finally {
     loading.value = false
   }
@@ -41,11 +43,10 @@ async function handleReset() {
       </RouterLink>
     </div>
 
-    <form v-else @submit.prevent="handleReset" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-text-secondary mb-1">Email</label>
+    <form v-else class="space-y-4" @submit.prevent="handleReset">
+      <FormField label="Email">
         <input v-model="email" type="email" class="input" placeholder="you@example.com" required />
-      </div>
+      </FormField>
 
       <button type="submit" class="btn-primary w-full" :disabled="loading">
         {{ loading ? 'Sending...' : 'Send reset email' }}

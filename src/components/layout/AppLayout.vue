@@ -10,8 +10,11 @@ import { useFilterStore } from '@/stores/filters'
 import { useStarTagStore } from '@/stores/starTags'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useSwipe } from '@/composables/useSwipe'
+import { useBreakpoint } from '@/composables/useBreakpoint'
+import { useAppReady } from '@/composables/useAppReady'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import MobileNav from '@/components/layout/MobileNav.vue'
+import ShortcutsDialog from '@/components/common/ShortcutsDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,39 +25,31 @@ const authStore = useAuthStore()
 const groupStore = useGroupStore()
 const filterStore = useFilterStore()
 const starTagStore = useStarTagStore()
+const { isMobile } = useBreakpoint()
+const { markReady, resetReady } = useAppReady()
 
-const isMobile = ref(window.innerWidth < 768)
 const sidebarRef = ref<InstanceType<typeof AppSidebar> | null>(null)
 const sidebarEl = ref<HTMLElement | null>(null)
-
-// Update sidebarEl when the component ref changes
-watch(sidebarRef, (comp) => {
-  sidebarEl.value = comp?.$el ?? null
-}, { immediate: true })
+watch(sidebarRef, (comp) => (sidebarEl.value = comp?.$el ?? null), { immediate: true })
 
 useSwipe({
   target: sidebarEl,
   direction: 'left',
-  onSwipe: () => { if (isMobile.value) ui.closeSidebar() },
+  onSwipe: () => {
+    if (isMobile.value) ui.closeSidebar()
+  },
 })
 
-function onResize() {
-  const wasMobile = isMobile.value
-  isMobile.value = window.innerWidth < 768
+// Auto-open the sidebar when the viewport grows past the mobile breakpoint.
+watch(isMobile, (mobile, wasMobile) => {
+  if (wasMobile && !mobile && !ui.sidebarOpen) ui.toggleSidebar()
+})
 
-  // Auto-open sidebar when crossing from mobile to desktop
-  if (wasMobile && !isMobile.value && !ui.sidebarOpen) {
-    ui.toggleSidebar()
-  }
-}
-
-// Close sidebar on mobile when route changes
+// Close the sidebar on mobile when the route changes.
 watch(
   () => route.fullPath,
   () => {
-    if (isMobile.value && ui.sidebarOpen) {
-      ui.closeSidebar()
-    }
+    if (isMobile.value && ui.sidebarOpen) ui.closeSidebar()
   },
 )
 
@@ -65,94 +60,66 @@ function focusSelectedEntry() {
   el?.focus({ preventScroll: true })
 }
 
+function openSelectedExternally() {
+  const url = entryStore.selectedEntry?.url
+  if (!url) return
+  if (ui.openLinksInNewTab) window.open(url, '_blank')
+  else window.location.href = url
+}
+
 useKeyboardShortcuts([
   { key: 'j', handler: () => { entryStore.selectNext(); requestAnimationFrame(focusSelectedEntry) }, description: 'Next entry' },
   { key: 'k', handler: () => { entryStore.selectPrevious(); requestAnimationFrame(focusSelectedEntry) }, description: 'Previous entry' },
-  {
-    key: 's',
-    handler: () => {
-      if (entryStore.selectedEntryId) entryStore.toggleStar(entryStore.selectedEntryId)
-    },
-    description: 'Star/unstar',
-  },
-  {
-    key: 'm',
-    handler: () => {
-      if (entryStore.selectedEntryId) entryStore.toggleRead(entryStore.selectedEntryId)
-    },
-    description: 'Toggle read',
-  },
-  {
-    key: 'o',
-    handler: () => {
-      const entry = entryStore.selectedEntry
-      if (entry?.url) {
-        if (ui.openLinksInNewTab) {
-          window.open(entry.url, '_blank')
-        } else {
-          window.location.href = entry.url
-        }
-      }
-    },
-    description: 'Open in browser',
-  },
-  {
-    key: 'Enter',
-    handler: () => {
-      if (entryStore.selectedEntryId) ui.openReader()
-    },
-    description: 'Open reader',
-  },
+  { key: 's', handler: () => { if (entryStore.selectedEntryId) entryStore.toggleStar(entryStore.selectedEntryId) }, description: 'Star/unstar' },
+  { key: 'm', handler: () => { if (entryStore.selectedEntryId) entryStore.toggleRead(entryStore.selectedEntryId) }, description: 'Toggle read' },
+  { key: 'o', handler: openSelectedExternally, description: 'Open in browser' },
+  { key: 'Enter', handler: () => { if (entryStore.selectedEntryId) ui.openReader() }, description: 'Open reader' },
   { key: 'Escape', handler: () => { if (ui.searchOpen) ui.closeSearch(); else ui.closeReader() }, description: 'Close reader / search' },
   { key: '/', handler: () => ui.toggleSearch(), description: 'Focus search' },
-  {
-    key: '?',
-    shift: true,
-    handler: () => ui.toggleShortcutsDialog(),
-    description: 'Show shortcuts',
-  },
+  { key: '?', shift: true, handler: () => ui.toggleShortcutsDialog(), description: 'Show shortcuts' },
 ])
 
-onMounted(async () => {
-  await Promise.all([
+/** Everything the sidebar and entry pages depend on, in parallel. */
+async function loadAppData() {
+  const results = await Promise.allSettled([
     feedStore.fetchFeeds(),
     groupStore.fetchGroups(),
     filterStore.fetchFilters(),
     starTagStore.fetchTags(),
     ui.loadSettingsFromDB(authStore.user!.id),
   ])
+  for (const r of results) {
+    if (r.status === 'rejected') console.error('App data load failed:', r.reason)
+  }
+}
+
+onMounted(async () => {
+  await loadAppData()
+  markReady()
 
   // New users with no feeds: send them to Discover instead of a blank "All" page
-  if (feedStore.feeds.length === 0 && route.name === 'all-entries') {
+  if (feedStore.loaded && feedStore.feeds.length === 0 && route.name === 'all-entries') {
     router.replace({ name: 'discover' })
   }
 
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('online', handleOnline)
-  window.addEventListener('resize', onResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('online', handleOnline)
-  window.removeEventListener('resize', onResize)
+  if (recoveryTimer) clearTimeout(recoveryTimer)
+  resetReady()
 })
 
 // ---------------------------------------------------------------------------
 // Tab-return recovery
 // ---------------------------------------------------------------------------
-// The Supabase JS client has its own visibilitychange handler that refreshes
-// the access token when a backgrounded tab becomes visible.  We must NOT call
-// refreshSession() ourselves — that races with the library's handler and can
-// fail when the refresh token has already been consumed.
-//
-// Instead we:
-//  1. Note when the tab is hidden.
-//  2. When visible again, arm a pending recovery.
-//  3. If the auth store's tokenRefreshCount increments (meaning the library
-//     successfully refreshed the token), we immediately re-fetch app data.
-//  4. As a fallback (e.g. the token was still valid so no refresh fires),
-//     a 2-second timeout triggers the re-fetch anyway.
+// The Supabase JS client refreshes the access token itself when a backgrounded
+// tab becomes visible. We never call refreshSession() (it races the library's
+// handler). Instead: note when the tab hid; on return, wait for the library's
+// TOKEN_REFRESHED (tokenRefreshCount) or a 2 s fallback, then re-fetch.
 // ---------------------------------------------------------------------------
 let lastHiddenAt = 0
 let pendingRecovery = false
@@ -163,14 +130,9 @@ function handleVisibilityChange() {
     lastHiddenAt = Date.now()
     return
   }
-
   const hiddenMs = lastHiddenAt > 0 ? Date.now() - lastHiddenAt : 0
   const hasErrors = !!feedStore.error || !!entryStore.error
-  const staleEnough = hiddenMs > 5_000
-
-  if (hasErrors || staleEnough) {
-    scheduleRecovery()
-  }
+  if (hasErrors || hiddenMs > 5_000) scheduleRecovery()
   lastHiddenAt = 0
 }
 
@@ -181,9 +143,6 @@ function handleOnline() {
 function scheduleRecovery() {
   if (pendingRecovery) return
   pendingRecovery = true
-
-  // Fallback: if TOKEN_REFRESHED doesn't fire within 2 s (token was still
-  // valid), re-fetch anyway so the UI gets fresh data.
   recoveryTimer = setTimeout(() => {
     if (pendingRecovery) {
       pendingRecovery = false
@@ -192,37 +151,28 @@ function scheduleRecovery() {
   }, 2_000)
 }
 
-// When the Supabase library finishes refreshing the token it fires
-// TOKEN_REFRESHED, which increments tokenRefreshCount.  React immediately
-// instead of waiting for the timeout.
 watch(
   () => authStore.tokenRefreshCount,
   () => {
-    if (pendingRecovery) {
-      pendingRecovery = false
-      if (recoveryTimer) {
-        clearTimeout(recoveryTimer)
-        recoveryTimer = null
-      }
-      refetchAllData()
+    if (!pendingRecovery) return
+    pendingRecovery = false
+    if (recoveryTimer) {
+      clearTimeout(recoveryTimer)
+      recoveryTimer = null
     }
+    refetchAllData()
   },
 )
 
 async function refetchAllData() {
-  if (!authStore.session) return // session is dead — auth guard will redirect
-
-  try {
-    await Promise.all([
-      feedStore.fetchFeeds(),
-      groupStore.fetchGroups(),
-      filterStore.fetchFilters(),
-      starTagStore.fetchTags(),
-      entryStore.silentRefresh(),
-    ])
-  } catch {
-    // Recovery is best-effort; errors surface in individual stores
-  }
+  if (!authStore.session) return // session is dead; the auth guard will redirect
+  await Promise.allSettled([
+    feedStore.fetchFeeds(),
+    groupStore.fetchGroups(),
+    filterStore.fetchFilters(),
+    starTagStore.fetchTags(),
+    entryStore.silentRefresh(),
+  ])
 }
 </script>
 
@@ -254,5 +204,7 @@ async function refetchAllData() {
 
     <!-- Mobile bottom nav -->
     <MobileNav class="md:hidden" />
+
+    <ShortcutsDialog />
   </div>
 </template>

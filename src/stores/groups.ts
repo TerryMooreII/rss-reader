@@ -1,281 +1,202 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
 import type { Group } from '@/types/models'
 import { useAuthStore } from './auth'
+import { useFeedStore } from './feeds'
+
+const LS_EXPANDED = 'acta:expandedGroups'
+
+function loadExpanded(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(LS_EXPANDED) || '[]'))
+  } catch {
+    return new Set()
+  }
+}
 
 export const useGroupStore = defineStore('groups', () => {
-  // ---------------------------------------------------------------------------
-  // State
-  // ---------------------------------------------------------------------------
   const groups = ref<Group[]>([])
   const groupFeeds = ref<Map<string, string[]>>(new Map())
-  const loading = ref(false)
-  const expandedGroups = ref<Set<string>>(
-    new Set(JSON.parse(localStorage.getItem('acta_expanded_groups') || '[]')),
-  )
+  const expandedGroups = ref<Set<string>>(loadExpanded())
 
   // ---------------------------------------------------------------------------
   // Getters
   // ---------------------------------------------------------------------------
 
-  /** Groups sorted by their position field. */
-  const sortedGroups = computed(() => {
-    return [...groups.value].sort((a, b) => a.position - b.position)
+  const sortedGroups = computed(() => [...groups.value].sort((a, b) => a.position - b.position))
+
+  const groupMap = computed(() => new Map(groups.value.map((g) => [g.id, g])))
+
+  function groupById(id: string): Group | undefined {
+    return groupMap.value.get(id)
+  }
+
+  function feedsByGroup(groupId: string): string[] {
+    return groupFeeds.value.get(groupId) ?? []
+  }
+
+  /** Feed ids per group as Sets, for O(1) membership checks. */
+  const groupFeedSets = computed(() => {
+    const map = new Map<string, Set<string>>()
+    for (const [groupId, feedIds] of groupFeeds.value) map.set(groupId, new Set(feedIds))
+    return map
   })
 
-  /** Return a group by its id. */
-  const groupById = computed(() => {
-    return (id: string): Group | undefined => groups.value.find((g) => g.id === id)
-  })
+  function isFeedInGroup(groupId: string, feedId: string): boolean {
+    return groupFeedSets.value.get(groupId)?.has(feedId) ?? false
+  }
 
-  /** Return the feed ids belonging to a group. */
-  const feedsByGroup = computed(() => {
-    return (groupId: string): string[] => groupFeeds.value.get(groupId) ?? []
-  })
-
-  /** Set of all feed IDs that belong to at least one group. */
   const allGroupedFeedIds = computed(() => {
     const set = new Set<string>()
-    for (const feedIds of groupFeeds.value.values()) {
-      for (const id of feedIds) set.add(id)
-    }
+    for (const feedIds of groupFeeds.value.values()) for (const id of feedIds) set.add(id)
     return set
   })
+
+  /** Unread per group, derived from per-feed counts in the feed store. */
+  const unreadByGroup = computed(() => {
+    const feedMap = useFeedStore().feedMap
+    const map = new Map<string, number>()
+    for (const [groupId, feedIds] of groupFeeds.value) {
+      let sum = 0
+      for (const id of feedIds) sum += feedMap.get(id)?.unread_count ?? 0
+      map.set(groupId, sum)
+    }
+    return map
+  })
+
+  function unreadFor(groupId: string): number {
+    return unreadByGroup.value.get(groupId) ?? 0
+  }
 
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
 
-  /**
-   * Fetch all groups (ordered by position), their feed associations, and their
-   * unread counts.
-   */
   async function fetchGroups(): Promise<void> {
-    loading.value = true
-
-    try {
-      // 1. Groups ordered by position
-      const { data: groupRows, error: groupError } = await supabase
+    const [groupsResult, gfResult] = await Promise.all([
+      supabase
         .from('groups')
-        .select('*')
-        .order('position', { ascending: true })
+        .select('id, user_id, name, icon, position, created_at, updated_at')
+        .order('position', { ascending: true }),
+      supabase.from('group_feeds').select('group_id, feed_id'),
+    ])
+    if (groupsResult.error) throw groupsResult.error
+    if (gfResult.error) throw gfResult.error
 
-      if (groupError) throw groupError
-
-      // 2. Group-feed associations
-      const { data: gfRows, error: gfError } = await supabase
-        .from('group_feeds')
-        .select('group_id, feed_id')
-
-      if (gfError) throw gfError
-
-      const gfMap = new Map<string, string[]>()
-      if (gfRows) {
-        for (const row of gfRows as { group_id: string; feed_id: string }[]) {
-          const existing = gfMap.get(row.group_id) ?? []
-          existing.push(row.feed_id)
-          gfMap.set(row.group_id, existing)
-        }
-      }
-      groupFeeds.value = gfMap
-
-      // 3. Group unread counts via RPC
-      const authStore = useAuthStore()
-      const { data: unreadData, error: unreadError } = await supabase.rpc(
-        'get_group_unread_counts',
-        { p_user_id: authStore.user!.id },
-      )
-
-      const unreadMap = new Map<string, number>()
-      if (!unreadError && unreadData) {
-        for (const row of unreadData as { group_id: string; unread_count: number }[]) {
-          unreadMap.set(row.group_id, row.unread_count)
-        }
-      }
-
-      // Assemble groups with unread counts
-      groups.value = ((groupRows ?? []) as Group[]).map((g) => ({
-        ...g,
-        unread_count: unreadMap.get(g.id) ?? 0,
-      }))
-    } catch (err: unknown) {
-      console.error('Failed to fetch groups:', err)
-    } finally {
-      loading.value = false
+    const gfMap = new Map<string, string[]>()
+    for (const row of (gfResult.data ?? []) as { group_id: string; feed_id: string }[]) {
+      const list = gfMap.get(row.group_id)
+      if (list) list.push(row.feed_id)
+      else gfMap.set(row.group_id, [row.feed_id])
     }
+    groupFeeds.value = gfMap
+    groups.value = (groupsResult.data ?? []) as Group[]
   }
 
-  /**
-   * Create a new group.
-   */
-  async function createGroup(name: string): Promise<Group | null> {
-    const authStore = useAuthStore()
-    const position = groups.value.length
-    const { data, error: insertError } = await supabase
+  async function createGroup(name: string): Promise<Group> {
+    const { data, error } = await supabase
       .from('groups')
-      .insert({ name, position, user_id: authStore.user!.id })
+      .insert({ name, position: groups.value.length, user_id: useAuthStore().user!.id })
       .select()
       .single()
-
-    if (insertError) throw insertError
+    if (error) throw error
 
     const newGroup = data as Group
     groups.value.push(newGroup)
     return newGroup
   }
 
-  /**
-   * Rename an existing group.
-   */
   async function renameGroup(id: string, name: string): Promise<void> {
-    try {
-      const { error: updateError } = await supabase
-        .from('groups')
-        .update({ name })
-        .eq('id', id)
-
-      if (updateError) throw updateError
-
-      const group = groups.value.find((g) => g.id === id)
-      if (group) {
-        group.name = name
-      }
-    } catch (err: unknown) {
-      console.error('Failed to rename group:', err)
-    }
+    const { error } = await supabase.from('groups').update({ name }).eq('id', id)
+    if (error) throw error
+    const group = groupMap.value.get(id)
+    if (group) group.name = name
   }
 
-  /**
-   * Delete a group by id.
-   */
   async function deleteGroup(id: string): Promise<void> {
-    try {
-      const { error: deleteError } = await supabase
-        .from('groups')
-        .delete()
-        .eq('id', id)
-
-      if (deleteError) throw deleteError
-
-      groups.value = groups.value.filter((g) => g.id !== id)
-      groupFeeds.value.delete(id)
-      expandedGroups.value.delete(id)
-    } catch (err: unknown) {
-      console.error('Failed to delete group:', err)
-    }
+    const { error } = await supabase.from('groups').delete().eq('id', id)
+    if (error) throw error
+    groups.value = groups.value.filter((g) => g.id !== id)
+    groupFeeds.value.delete(id)
+    expandedGroups.value.delete(id)
+    persistExpanded()
   }
 
-  /**
-   * Reorder groups by updating each group's position to match its index in the
-   * provided array of ids.
-   */
+  /** One upsert with every group's new position. */
   async function reorderGroups(orderedIds: string[]): Promise<void> {
-    try {
-      const updates = orderedIds.map((id, index) =>
-        supabase.from('groups').update({ position: index }).eq('id', id),
-      )
+    const userId = useAuthStore().user!.id
+    const rows = orderedIds.flatMap((id, position) => {
+      const g = groupMap.value.get(id)
+      return g ? [{ id, user_id: userId, name: g.name, position }] : []
+    })
+    const { error } = await supabase.from('groups').upsert(rows, { onConflict: 'id' })
+    if (error) throw error
 
-      await Promise.all(updates)
-
-      // Apply locally
-      for (const group of groups.value) {
-        const newIndex = orderedIds.indexOf(group.id)
-        if (newIndex !== -1) {
-          group.position = newIndex
-        }
-      }
-    } catch (err: unknown) {
-      console.error('Failed to reorder groups:', err)
+    for (const row of rows) {
+      const g = groupMap.value.get(row.id)
+      if (g) g.position = row.position
     }
   }
 
-  /**
-   * Add a feed to a group.
-   */
   async function addFeedToGroup(groupId: string, feedId: string): Promise<void> {
-    try {
-      const { error: insertError } = await supabase
-        .from('group_feeds')
-        .insert({ group_id: groupId, feed_id: feedId })
-
-      if (insertError) throw insertError
-
-      const existing = groupFeeds.value.get(groupId) ?? []
-      existing.push(feedId)
-      groupFeeds.value.set(groupId, existing)
-    } catch (err: unknown) {
-      console.error('Failed to add feed to group:', err)
-    }
+    if (isFeedInGroup(groupId, feedId)) return
+    const { error } = await supabase.from('group_feeds').insert({ group_id: groupId, feed_id: feedId })
+    if (error) throw error
+    groupFeeds.value.set(groupId, [...feedsByGroup(groupId), feedId])
   }
 
-  /**
-   * Remove a feed from a group.
-   */
   async function removeFeedFromGroup(groupId: string, feedId: string): Promise<void> {
-    try {
-      const { error: deleteError } = await supabase
-        .from('group_feeds')
-        .delete()
-        .eq('group_id', groupId)
-        .eq('feed_id', feedId)
-
-      if (deleteError) throw deleteError
-
-      const existing = groupFeeds.value.get(groupId) ?? []
-      groupFeeds.value.set(
-        groupId,
-        existing.filter((id) => id !== feedId),
-      )
-    } catch (err: unknown) {
-      console.error('Failed to remove feed from group:', err)
-    }
+    const { error } = await supabase
+      .from('group_feeds')
+      .delete()
+      .eq('group_id', groupId)
+      .eq('feed_id', feedId)
+    if (error) throw error
+    groupFeeds.value.set(groupId, feedsByGroup(groupId).filter((id) => id !== feedId))
   }
 
-  /**
-   * Optimistically update the unread count for all groups that contain the
-   * given feed by the supplied delta.
-   */
-  function updateUnreadCountForFeed(feedId: string, delta: number): void {
+  /** Local-only cleanup after an unsubscribe (the DB cascades the rows). */
+  function removeFeedEverywhere(feedId: string): void {
     for (const [groupId, feedIds] of groupFeeds.value) {
       if (feedIds.includes(feedId)) {
-        const group = groups.value.find((g) => g.id === groupId)
-        if (group) {
-          group.unread_count = Math.max(0, (group.unread_count ?? 0) + delta)
-        }
+        groupFeeds.value.set(groupId, feedIds.filter((id) => id !== feedId))
       }
     }
   }
 
-  /**
-   * Toggle a group's expanded/collapsed state in the sidebar.
-   */
-  function toggleGroup(id: string): void {
-    if (expandedGroups.value.has(id)) {
-      expandedGroups.value.delete(id)
-    } else {
-      expandedGroups.value.add(id)
-    }
-    persistExpandedGroups()
+  function setExpanded(id: string, expanded: boolean): void {
+    if (expanded) expandedGroups.value.add(id)
+    else expandedGroups.value.delete(id)
+    persistExpanded()
   }
 
-  /** Persist expanded groups to localStorage. */
-  function persistExpandedGroups(): void {
-    localStorage.setItem('acta_expanded_groups', JSON.stringify([...expandedGroups.value]))
+  function toggleGroup(id: string): void {
+    setExpanded(id, !expandedGroups.value.has(id))
+  }
+
+  function persistExpanded(): void {
+    localStorage.setItem(LS_EXPANDED, JSON.stringify([...expandedGroups.value]))
+  }
+
+  function reset(): void {
+    groups.value = []
+    groupFeeds.value = new Map()
   }
 
   return {
-    // State
     groups,
     groupFeeds,
-    loading,
     expandedGroups,
-    // Getters
     sortedGroups,
+    groupMap,
     groupById,
     feedsByGroup,
+    groupFeedSets,
+    isFeedInGroup,
     allGroupedFeedIds,
-    // Actions
+    unreadByGroup,
+    unreadFor,
     fetchGroups,
     createGroup,
     renameGroup,
@@ -283,7 +204,9 @@ export const useGroupStore = defineStore('groups', () => {
     reorderGroups,
     addFeedToGroup,
     removeFeedFromGroup,
+    removeFeedEverywhere,
+    setExpanded,
     toggleGroup,
-    updateUnreadCountForFeed,
+    reset,
   }
 })

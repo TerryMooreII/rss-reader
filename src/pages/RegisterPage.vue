@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
+import { errorMessage } from '@/composables/useAsyncAction'
+import FormField from '@/components/ui/FormField.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -28,8 +30,8 @@ async function handleRegister() {
     })
     notifications.success('Account created! Please check your email to confirm.')
     router.push('/login')
-  } catch (e: any) {
-    notifications.error(e.message || 'Failed to create account')
+  } catch (e: unknown) {
+    notifications.error(errorMessage(e, 'Failed to create account'))
   } finally {
     loading.value = false
   }
@@ -40,29 +42,21 @@ async function handleRegister() {
   <div>
     <h2 class="text-xl font-bold text-text-primary mb-6">Create your account</h2>
 
-    <form @submit.prevent="handleRegister" class="space-y-4">
+    <form class="space-y-4" @submit.prevent="handleRegister">
       <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-medium text-text-secondary mb-1">First name</label>
+        <FormField label="First name">
           <input v-model="firstName" type="text" class="input" placeholder="Jane" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-text-secondary mb-1">Last name</label>
+        </FormField>
+        <FormField label="Last name">
           <input v-model="lastName" type="text" class="input" placeholder="Doe" />
-        </div>
+        </FormField>
       </div>
 
-      <div>
-        <label class="block text-sm font-medium text-text-secondary mb-1"
-          >Email <span class="text-danger">*</span></label
-        >
+      <FormField label="Email" required>
         <input v-model="email" type="email" class="input" placeholder="you@example.com" required />
-      </div>
+      </FormField>
 
-      <div>
-        <label class="block text-sm font-medium text-text-secondary mb-1"
-          >Handle <span class="text-danger">*</span></label
-        >
+      <FormField label="Handle" required>
         <div class="relative">
           <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-muted">@</span>
           <input
@@ -75,21 +69,11 @@ async function handleRegister() {
             required
           />
         </div>
-      </div>
+      </FormField>
 
-      <div>
-        <label class="block text-sm font-medium text-text-secondary mb-1"
-          >Password <span class="text-danger">*</span></label
-        >
-        <input
-          v-model="password"
-          type="password"
-          class="input"
-          placeholder="At least 6 characters"
-          minlength="6"
-          required
-        />
-      </div>
+      <FormField label="Password" required>
+        <input v-model="password" type="password" class="input" placeholder="At least 6 characters" minlength="6" required />
+      </FormField>
 
       <button type="submit" class="btn-primary w-full" :disabled="loading">
         {{ loading ? 'Creating account...' : 'Create account' }}

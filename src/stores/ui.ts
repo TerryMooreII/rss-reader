@@ -1,6 +1,7 @@
-import { ref, watch } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
+import { useAuthStore } from './auth'
 
 type Theme = 'light' | 'dark' | 'midnight' | 'forest'
 type DisplayMode = 'comfortable' | 'compact' | 'feed'
@@ -113,15 +114,14 @@ export const useUIStore = defineStore('ui', () => {
     if (_dbSaveTimer) clearTimeout(_dbSaveTimer)
     _dbSaveTimer = setTimeout(async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!session) return
+        const userId = useAuthStore().user?.id
+        if (!userId) return
 
-        await supabase
+        const { error } = await supabase
           .from('user_settings')
           .update(_getSyncedSnapshot())
-          .eq('user_id', session.user.id)
+          .eq('user_id', userId)
+        if (error) throw error
       } catch (err) {
         console.error('Failed to save settings to DB:', err)
       }
@@ -156,7 +156,12 @@ export const useUIStore = defineStore('ui', () => {
 
   // Device-local settings: localStorage only
   watch(sidebarOpen, (val) => localStorage.setItem(LS.sidebarOpen, JSON.stringify(val)))
-  watch(listWidth, (val) => localStorage.setItem(LS.listWidth, JSON.stringify(val)))
+  // listWidth changes on every pointermove while dragging; persist lazily.
+  let _listWidthTimer: ReturnType<typeof setTimeout> | null = null
+  watch(listWidth, (val) => {
+    if (_listWidthTimer) clearTimeout(_listWidthTimer)
+    _listWidthTimer = setTimeout(() => localStorage.setItem(LS.listWidth, JSON.stringify(val)), 250)
+  })
 
   // Apply the theme class to the document whenever it changes
   watch(
@@ -221,10 +226,12 @@ export const useUIStore = defineStore('ui', () => {
       unreadOnly.value = data.show_unread_only ?? false
       fontSize.value = (data.font_size as FontSize) || 'medium'
 
-      settingsLoaded.value = true
-      _dbSyncEnabled = true
+      // Watchers flush after this tick; re-enable sync only once they have run,
+      // otherwise the values we just loaded get written straight back.
+      await nextTick()
     } catch (err) {
       console.error('Failed to load settings from DB:', err)
+    } finally {
       _dbSyncEnabled = true
       settingsLoaded.value = true
     }

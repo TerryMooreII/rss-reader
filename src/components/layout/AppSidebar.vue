@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feeds'
 import { useGroupStore } from '@/stores/groups'
 import { useStarTagStore } from '@/stores/starTags'
 import { useEntryStore } from '@/stores/entries'
-import { useNotificationStore } from '@/stores/notifications'
+import { useAsyncAction } from '@/composables/useAsyncAction'
 import {
   RssIcon,
   InboxIcon,
@@ -21,6 +21,9 @@ import {
 import SidebarFeedItem from '@/components/sidebar/SidebarFeedItem.vue'
 import SidebarGroupItem from '@/components/sidebar/SidebarGroupItem.vue'
 import AddFeedDialog from '@/components/sidebar/AddFeedDialog.vue'
+import UnreadBadge from '@/components/ui/UnreadBadge.vue'
+import DropdownMenu from '@/components/ui/DropdownMenu.vue'
+import InlineConfirm from '@/components/ui/InlineConfirm.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -28,7 +31,7 @@ const feedStore = useFeedStore()
 const groupStore = useGroupStore()
 const starTagStore = useStarTagStore()
 const entryStore = useEntryStore()
-const notifications = useNotificationStore()
+const { run } = useAsyncAction()
 
 const showAddFeed = ref(false)
 const showCreateGroup = ref(false)
@@ -44,33 +47,26 @@ function toggleStarTagMenu(tagId: string) {
   confirmUnstarTagId.value = null
 }
 
+function closeStarTagMenu() {
+  starTagMenuOpenId.value = null
+  confirmUnstarTagId.value = null
+}
+
 async function unstarAllInTag(tagId: string) {
-  await entryStore.unstarByTag(tagId)
-  starTagMenuOpenId.value = null
-  confirmUnstarTagId.value = null
-  await starTagStore.fetchTags()
-  notifications.success('All items unstarred')
+  await run(() => entryStore.unstarByTag(tagId), {
+    success: 'All items unstarred',
+    error: 'Failed to unstar items',
+  })
+  closeStarTagMenu()
 }
-
-function onStarTagMenuOutsideClick(e: MouseEvent) {
-  if (!starTagMenuOpenId.value) return
-  const target = e.target as HTMLElement
-  if (target.closest('[data-star-tag-menu]')) return
-  starTagMenuOpenId.value = null
-  confirmUnstarTagId.value = null
-}
-
-document.addEventListener('click', onStarTagMenuOutsideClick)
-onUnmounted(() => {
-  document.removeEventListener('click', onStarTagMenuOutsideClick)
-})
 
 // Section collapse state (persisted)
-const groupsSectionOpen = ref(localStorage.getItem('acta_groups_section') !== 'collapsed')
+const LS_GROUPS_SECTION = 'acta:groupsSection'
+const groupsSectionOpen = ref(localStorage.getItem(LS_GROUPS_SECTION) !== 'collapsed')
 
 function toggleGroupsSection() {
   groupsSectionOpen.value = !groupsSectionOpen.value
-  localStorage.setItem('acta_groups_section', groupsSectionOpen.value ? 'open' : 'collapsed')
+  localStorage.setItem(LS_GROUPS_SECTION, groupsSectionOpen.value ? 'open' : 'collapsed')
 }
 
 async function openCreateGroup() {
@@ -80,18 +76,15 @@ async function openCreateGroup() {
 }
 
 async function createGroup() {
-  if (!newGroupName.value.trim()) return
-
-  try {
-    const group = await groupStore.createGroup(newGroupName.value.trim())
-    if (group) {
-      groupStore.expandedGroups.add(group.id)
-      notifications.success('Group created')
-      newGroupName.value = ''
-      showCreateGroup.value = false
-    }
-  } catch {
-    notifications.error('Failed to create group')
+  const name = newGroupName.value.trim()
+  if (!name) return
+  const group = await run(() => groupStore.createGroup(name), {
+    success: 'Group created',
+    error: 'Failed to create group',
+  })
+  if (group) {
+    groupStore.setExpanded(group.id, true)
+    cancelCreateGroup()
   }
 }
 
@@ -104,25 +97,19 @@ function cancelCreateGroup() {
 watch(
   () => route.params.groupId,
   (groupId) => {
-    if (groupId && typeof groupId === 'string') {
-      groupStore.expandedGroups.add(groupId)
-    }
+    if (typeof groupId === 'string' && groupId) groupStore.setExpanded(groupId, true)
   },
   { immediate: true },
 )
-
-const totalUnread = computed(() => feedStore.totalUnread)
 
 /** Feeds not belonging to any group, sorted alphabetically. */
 const ungroupedFeeds = computed(() => {
   const grouped = groupStore.allGroupedFeedIds
   return feedStore.feeds
     .filter((f) => !grouped.has(f.id))
-    .sort((a, b) => {
-      const aTitle = (a.custom_title || a.title || '').toLowerCase()
-      const bTitle = (b.custom_title || b.title || '').toLowerCase()
-      return aTitle.localeCompare(bTitle)
-    })
+    .sort((a, b) =>
+      (a.custom_title || a.title || '').toLowerCase().localeCompare((b.custom_title || b.title || '').toLowerCase()),
+    )
 })
 
 function isActive(name: string) {
@@ -142,11 +129,7 @@ function isStarTagActive(tagId: string) {
         <RssIcon class="h-6 w-6 text-accent" />
         <span class="text-lg font-bold text-text-primary">Acta</span>
       </RouterLink>
-      <button
-        class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
-        aria-label="Add feed"
-        @click="showAddFeed = true"
-      >
+      <button class="btn-icon" aria-label="Add feed" @click="showAddFeed = true">
         <PlusIcon class="h-5 w-5" />
       </button>
     </div>
@@ -161,7 +144,6 @@ function isStarTagActive(tagId: string) {
 
     <!-- Navigation -->
     <nav aria-label="Main navigation" class="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-      <!-- Main nav -->
       <RouterLink
         to="/app/all"
         :class="isActive('all-entries') ? 'sidebar-item-active' : 'sidebar-item'"
@@ -169,12 +151,7 @@ function isStarTagActive(tagId: string) {
       >
         <InboxIcon class="h-5 w-5 shrink-0" />
         <span class="flex-1">All</span>
-        <span
-          v-if="totalUnread > 0"
-          class="ml-auto rounded-full bg-badge/10 px-2 py-0.5 text-xs font-medium text-badge"
-        >
-          {{ totalUnread > 999 ? '999+' : totalUnread }}
-        </span>
+        <UnreadBadge :count="feedStore.totalUnread" class="ml-auto" />
       </RouterLink>
 
       <div class="group/starred-row relative flex items-center">
@@ -206,15 +183,8 @@ function isStarTagActive(tagId: string) {
       </div>
 
       <!-- Star tag sub-items -->
-      <div
-        v-if="starTagStore.expandedStarred && starTagStore.sortedTags.length > 0"
-        class="pl-4 space-y-0.5"
-      >
-        <div
-          v-for="tag in starTagStore.sortedTags"
-          :key="tag.id"
-          class="group/star-tag relative flex items-center"
-        >
+      <div v-if="starTagStore.expandedStarred && starTagStore.sortedTags.length > 0" class="pl-4 space-y-0.5">
+        <div v-for="tag in starTagStore.sortedTags" :key="tag.id" class="group/star-tag relative flex items-center">
           <RouterLink
             :to="`/app/starred/tag/${tag.id}`"
             class="flex-1"
@@ -223,16 +193,13 @@ function isStarTagActive(tagId: string) {
           >
             <StarIcon class="h-4 w-4 shrink-0 text-star" />
             <span class="flex-1 truncate">{{ tag.name }}</span>
-            <span
-              v-if="(tag.unread_count ?? 0) > 0"
-              class="ml-auto rounded-full bg-badge/10 px-2 py-0.5 text-xs font-medium text-badge transition-opacity group-hover/star-tag:opacity-0"
+            <UnreadBadge
+              :count="starTagStore.unreadFor(tag.id)"
+              class="ml-auto transition-opacity group-hover/star-tag:opacity-0"
               :class="{ 'opacity-0': starTagMenuOpenId === tag.id }"
-            >
-              {{ (tag.unread_count ?? 0) > 999 ? '999+' : tag.unread_count }}
-            </span>
+            />
           </RouterLink>
           <button
-            data-star-tag-menu
             class="absolute right-1 rounded p-1 text-text-muted opacity-0 hover:bg-bg-hover hover:text-text-primary group-hover/star-tag:opacity-100 transition-opacity"
             :class="{ 'opacity-100': starTagMenuOpenId === tag.id }"
             aria-label="Star tag options"
@@ -241,48 +208,21 @@ function isStarTagActive(tagId: string) {
             <EllipsisVerticalIcon class="h-4 w-4" />
           </button>
 
-          <!-- Dropdown menu -->
-          <Transition
-            enter-active-class="transition duration-100 ease-out"
-            enter-from-class="opacity-0 scale-95"
-            enter-to-class="opacity-100 scale-100"
-            leave-active-class="transition duration-75 ease-in"
-            leave-from-class="opacity-100 scale-100"
-            leave-to-class="opacity-0 scale-95"
-          >
-            <div
-              v-if="starTagMenuOpenId === tag.id"
-              data-star-tag-menu
-              class="absolute right-2 top-full z-50 mt-1 w-48 rounded-lg border border-border bg-bg-primary py-1 shadow-lg"
-            >
-              <template v-if="confirmUnstarTagId === tag.id">
-                <p class="px-3 py-2 text-xs text-text-muted">Unstar all items in "{{ tag.name }}"?</p>
-                <div class="flex gap-1 px-2 pb-1">
-                  <button
-                    class="flex-1 rounded px-2 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-hover"
-                    @click.stop="confirmUnstarTagId = null"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    class="flex-1 rounded px-2 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/10"
-                    @click.stop="unstarAllInTag(tag.id)"
-                  >
-                    Unstar All
-                  </button>
-                </div>
-              </template>
-              <template v-else>
-                <button
-                  class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover"
-                  @click.stop="confirmUnstarTagId = tag.id"
-                >
-                  <StarIcon class="h-4 w-4" />
-                  Unstar all
-                </button>
-              </template>
-            </div>
-          </Transition>
+          <DropdownMenu :open="starTagMenuOpenId === tag.id" @close="closeStarTagMenu">
+            <InlineConfirm
+              v-if="confirmUnstarTagId === tag.id"
+              layout="stacked"
+              :prompt="`Unstar all items in &quot;${tag.name}&quot;?`"
+              confirm-label="Unstar All"
+              cancel-label="Cancel"
+              @confirm="unstarAllInTag(tag.id)"
+              @cancel="confirmUnstarTagId = null"
+            />
+            <button v-else class="menu-item" @click.stop="confirmUnstarTagId = tag.id">
+              <StarIcon class="h-4 w-4" />
+              Unstar all
+            </button>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -322,19 +262,11 @@ function isStarTagActive(tagId: string) {
             :aria-expanded="groupsSectionOpen"
             @click="toggleGroupsSection"
           >
-            <ChevronRightIcon
-              class="h-3 w-3 transition-transform"
-              :class="{ 'rotate-90': groupsSectionOpen }"
-              aria-hidden="true"
-            />
+            <ChevronRightIcon class="h-3 w-3 transition-transform" :class="{ 'rotate-90': groupsSectionOpen }" aria-hidden="true" />
             Feeds
           </button>
-          <div class="relative group/tip" :class="{ 'invisible': !groupsSectionOpen || showCreateGroup }">
-            <button
-              class="rounded p-0.5 text-text-muted hover:bg-bg-hover hover:text-text-primary"
-              aria-label="Add new group"
-              @click="openCreateGroup"
-            >
+          <div class="relative group/tip" :class="{ invisible: !groupsSectionOpen || showCreateGroup }">
+            <button class="rounded p-0.5 text-text-muted hover:bg-bg-hover hover:text-text-primary" aria-label="Add new group" @click="openCreateGroup">
               <PlusIcon class="h-4 w-4" />
             </button>
             <span class="pointer-events-none absolute right-full top-1/2 z-50 mr-1.5 -translate-y-1/2 whitespace-nowrap rounded-md bg-bg-primary px-2.5 py-1 text-xs font-medium text-text-primary shadow-lg ring-1 ring-border hidden group-hover/tip:block">
@@ -351,51 +283,34 @@ function isStarTagActive(tagId: string) {
               v-model="newGroupName"
               type="text"
               placeholder="Group name"
-              class="w-full rounded border border-border bg-bg-secondary px-2 py-1 text-sm text-text-primary"
+              class="input-sm bg-bg-secondary"
               @keydown.enter="createGroup"
               @keydown.escape="cancelCreateGroup"
             />
           </div>
 
           <!-- Empty state hint -->
-          <p
-            v-if="groupStore.sortedGroups.length === 0 && !showCreateGroup"
-            class="px-3 py-2 text-xs text-text-muted leading-relaxed"
-          >
-            Groups let you organize feeds your way. Hit <button class="inline text-text-secondary hover:text-text-primary" @click="openCreateGroup">+</button> to create one, then drag feeds into it.
+          <p v-if="groupStore.sortedGroups.length === 0 && !showCreateGroup" class="px-3 py-2 text-xs text-text-muted leading-relaxed">
+            Groups let you organize feeds your way. Hit
+            <button class="inline text-text-secondary hover:text-text-primary" @click="openCreateGroup">+</button>
+            to create one, then drag feeds into it.
           </p>
 
           <div v-for="group in groupStore.sortedGroups" :key="group.id" class="space-y-0.5">
-            <SidebarGroupItem
-              :group="group"
-              :is-expanded="groupStore.expandedGroups.has(group.id)"
-            />
+            <SidebarGroupItem :group="group" :is-expanded="groupStore.expandedGroups.has(group.id)" />
 
-            <!-- Group feeds (collapsible) -->
-            <div
-              v-show="groupStore.expandedGroups.has(group.id)"
-              role="group"
-              :aria-label="group.name + ' feeds'"
-              class="pl-4"
-            >
-              <SidebarFeedItem
-                v-for="feedId in groupStore.feedsByGroup(group.id)"
-                :key="feedId"
-                :feed="feedStore.feedById(feedId)"
-              />
+            <!-- Group feeds: only mounted while expanded -->
+            <div v-if="groupStore.expandedGroups.has(group.id)" role="group" :aria-label="group.name + ' feeds'" class="pl-4">
+              <SidebarFeedItem v-for="feedId in groupStore.feedsByGroup(group.id)" :key="feedId" :feed="feedStore.feedById(feedId)" />
             </div>
           </div>
+
           <!-- Ungrouped feeds -->
-          <SidebarFeedItem
-            v-for="feed in ungroupedFeeds"
-            :key="feed.id"
-            :feed="feed"
-          />
+          <SidebarFeedItem v-for="feed in ungroupedFeeds" :key="feed.id" :feed="feed" />
         </template>
       </div>
     </nav>
 
-    <!-- Add Feed Dialog -->
     <AddFeedDialog :open="showAddFeed" @close="showAddFeed = false" />
   </aside>
 </template>

@@ -1,5 +1,3 @@
-export const PAGE_SIZE = 25
-
 export const FEED_CATEGORIES = [
   { value: 'technology', label: 'Technology', icon: 'CpuChipIcon' },
   { value: 'science', label: 'Science', icon: 'BeakerIcon' },
@@ -30,14 +28,15 @@ export const FEED_CATEGORIES = [
 
 export type FeedCategory = (typeof FEED_CATEGORIES)[number]['value']
 
+/** Single source for the shortcuts dialog, settings tab and marketing page. */
 export const KEYBOARD_SHORTCUTS = [
-  { key: 'j', description: 'Next entry' },
-  { key: 'k', description: 'Previous entry' },
-  { key: 's', description: 'Star / unstar entry' },
-  { key: 'm', description: 'Toggle read / unread' },
-  { key: 'o', description: 'Open in browser' },
-  { key: 'Enter', description: 'Open reader view' },
-  { key: 'Escape', description: 'Close reader view' },
-  { key: '/', description: 'Focus search' },
-  { key: '?', description: 'Show keyboard shortcuts' },
+  { key: 'j', label: 'Next', description: 'Next entry' },
+  { key: 'k', label: 'Previous', description: 'Previous entry' },
+  { key: 's', label: 'Star', description: 'Star / unstar entry' },
+  { key: 'm', label: 'Read/Unread', description: 'Toggle read / unread' },
+  { key: 'o', label: 'Open', description: 'Open in browser' },
+  { key: 'Enter', label: 'Reader', description: 'Open reader view' },
+  { key: 'Esc', label: 'Close', description: 'Close reader / search' },
+  { key: '/', label: 'Search', description: 'Focus search' },
+  { key: '?', label: 'Shortcuts', description: 'Show keyboard shortcuts' },
 ] as const

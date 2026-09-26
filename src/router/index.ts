@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { authGuard } from './guards'
 
+const EntryListPage = () => import('@/pages/EntryListPage.vue')
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior(_to, _from, savedPosition) {
@@ -54,45 +56,13 @@ const router = createRouter({
       meta: { requiresAuth: true },
       redirect: { name: 'all-entries' },
       children: [
-        {
-          path: 'all',
-          name: 'all-entries',
-          component: () => import('@/pages/AllEntriesPage.vue'),
-        },
-        {
-          path: 'starred',
-          name: 'starred-entries',
-          component: () => import('@/pages/StarredEntriesPage.vue'),
-        },
-        {
-          path: 'starred/tag/:starTagId',
-          name: 'star-tag-entries',
-          component: () => import('@/pages/StarTagEntriesPage.vue'),
-          props: true,
-        },
-        {
-          path: 'feed/:feedId',
-          name: 'feed-entries',
-          component: () => import('@/pages/FeedEntriesPage.vue'),
-          props: true,
-        },
-        {
-          path: 'group/:groupId',
-          name: 'group-entries',
-          component: () => import('@/pages/GroupEntriesPage.vue'),
-          props: true,
-        },
-        {
-          path: 'category/:category',
-          name: 'category-entries',
-          component: () => import('@/pages/CategoryEntriesPage.vue'),
-          props: true,
-        },
-        {
-          path: 'search',
-          name: 'search-entries',
-          component: () => import('@/pages/SearchEntriesPage.vue'),
-        },
+        { path: 'all', name: 'all-entries', component: EntryListPage, meta: { filterType: 'all' } },
+        { path: 'starred', name: 'starred-entries', component: EntryListPage, meta: { filterType: 'starred' } },
+        { path: 'starred/tag/:starTagId', name: 'star-tag-entries', component: EntryListPage, meta: { filterType: 'star_tag' } },
+        { path: 'feed/:feedId', name: 'feed-entries', component: EntryListPage, meta: { filterType: 'feed' } },
+        { path: 'group/:groupId', name: 'group-entries', component: EntryListPage, meta: { filterType: 'group' } },
+        { path: 'category/:category', name: 'category-entries', component: EntryListPage, meta: { filterType: 'category' } },
+        { path: 'search', name: 'search-entries', component: EntryListPage, meta: { filterType: 'search' } },
         {
           path: 'discover',
           name: 'discover',

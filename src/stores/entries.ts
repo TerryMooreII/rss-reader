@@ -2,23 +2,43 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/config/supabase'
 import type { Entry, EntryFilter, ContentFilter } from '@/types/models'
+import { decodeHtml, stripHtml, truncate } from '@/utils/html'
+import { compileWebSearchQuery } from '@/utils/webSearchMatch'
 import { useFeedStore } from './feeds'
 import { useGroupStore } from './groups'
+import { useStarTagStore } from './starTags'
 import { useAuthStore } from './auth'
 import { useUIStore } from './ui'
 import { useFilterStore } from './filters'
-import { compileWebSearchQuery } from '@/utils/webSearchMatch'
 
-const _ta = document.createElement('textarea')
-function decodeHtml(s: string | null | undefined): string | null {
-  if (!s) return s as null
-  _ta.innerHTML = s
-  return _ta.value
+type Cursor = { published_at: string; id: string }
+
+const STATUS_FLUSH_DELAY = 400
+const MARK_READ_DELAY = 1000
+
+/** RPC name and extra params for each filter type. */
+function rpcFor(f: EntryFilter): { name: string; params: Record<string, unknown>; paged: 'cursor' | 'offset' } {
+  switch (f.type) {
+    case 'feed':
+      return { name: 'get_feed_entries', params: { p_feed_id: f.feedId, p_unread_only: f.unreadOnly }, paged: 'cursor' }
+    case 'group':
+      return { name: 'get_group_entries', params: { p_group_id: f.groupId, p_unread_only: f.unreadOnly }, paged: 'cursor' }
+    case 'category':
+      return { name: 'get_category_entries', params: { p_category: f.category, p_unread_only: f.unreadOnly }, paged: 'cursor' }
+    case 'starred':
+      return { name: 'get_starred_entries', params: {}, paged: 'cursor' }
+    case 'star_tag':
+      return { name: 'get_starred_entries_by_tag', params: { p_star_tag_id: f.starTagId }, paged: 'cursor' }
+    case 'search':
+      return { name: f.scope === 'all' ? 'search_all_entries' : 'search_entries', params: { p_query: f.query }, paged: 'offset' }
+    case 'all':
+    default:
+      return { name: 'get_all_entries', params: { p_unread_only: f.unreadOnly }, paged: 'cursor' }
+  }
 }
 
-function stripHtml(s: string | null | undefined): string {
-  if (!s) return ''
-  return s.replace(/<[^>]*>/g, ' ')
+function errorText(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
 }
 
 export const useEntryStore = defineStore('entries', () => {
@@ -33,210 +53,102 @@ export const useEntryStore = defineStore('entries', () => {
   const filter = ref<EntryFilter>({ type: 'all', unreadOnly: false })
   const error = ref<string | null>(null)
   const markingAllRead = ref(false)
-
-  // For search offset-based pagination
-  let searchOffset = 0
-
-  // Page-based pagination state
   const currentPage = ref(1)
-  // Stores the cursor needed to fetch each page (index 0 = page 1 = no cursor)
-  const pageCursors: Array<{ published_at: string; starred_at?: string | null; id: string } | null> = [null]
 
-  // Auto-mark-read timer handle
+  /** Incremented by every list-replacing fetch; stale responses compare against it and bail. */
+  let fetchSeq = 0
+  let searchOffset = 0
+  /** Cursor that produced each page (index 0 = page 1 = no cursor). */
+  const pageCursors: Array<Cursor | null> = [null]
   let markReadTimer: ReturnType<typeof setTimeout> | null = null
 
   // ---------------------------------------------------------------------------
-  // Getters
+  // Keyword filters
   // ---------------------------------------------------------------------------
+  const _predicates = new Map<string, (text: string) => boolean>()
 
-  // ---------------------------------------------------------------------------
-  // Filter helpers
-  // ---------------------------------------------------------------------------
-
-  // Cache compiled filter predicates so we don't reparse on every entry
-  const _filterPredicates = new Map<string, (text: string) => boolean>()
-
-  function _getFilterPredicate(keyword: string): (text: string) => boolean {
-    let pred = _filterPredicates.get(keyword)
+  function _predicate(keyword: string): (text: string) => boolean {
+    let pred = _predicates.get(keyword)
     if (!pred) {
       pred = compileWebSearchQuery(keyword)
-      _filterPredicates.set(keyword, pred)
+      _predicates.set(keyword, pred)
     }
     return pred
   }
 
-  function _entryMatchesKeyword(rule: ContentFilter, entry: Entry): boolean {
+  function _ruleMatches(rule: ContentFilter, entry: Entry): boolean {
     if (rule.scope_type === 'feed' && rule.scope_id !== entry.feed_id) return false
-    if (rule.scope_type === 'group') {
-      const groupStore = useGroupStore()
-      const groupFeedIds = groupStore.feedsByGroup(rule.scope_id!)
-      if (!groupFeedIds.includes(entry.feed_id)) return false
-    }
-
-    const predicate = _getFilterPredicate(rule.keyword)
-    const title = entry.title ?? ''
-    const content = stripHtml(entry.content_html)
-
-    return predicate(title) || predicate(content)
+    if (rule.scope_type === 'group' && !useGroupStore().isFeedInGroup(rule.scope_id!, entry.feed_id)) return false
+    const pred = _predicate(rule.keyword)
+    return pred(entry.title ?? '') || pred(entry.plain_text)
   }
 
   // ---------------------------------------------------------------------------
   // Getters
   // ---------------------------------------------------------------------------
-
   const filteredEntries = computed(() => {
-    const filterStore = useFilterStore()
-    const hideRules = filterStore.enabledFilters.filter((f) => f.action === 'hide')
-
-    if (hideRules.length === 0) return entries.value
-
-    return entries.value.filter((entry) => {
-      // Never hide starred entries
-      if (entry.starred_at) return true
-      return !hideRules.some((rule) => _entryMatchesKeyword(rule, entry))
-    })
+    const rules = useFilterStore().hideRules
+    if (rules.length === 0) return entries.value
+    return entries.value.filter((e) => e.starred_at || !rules.some((r) => _ruleMatches(r, e)))
   })
 
-  const selectedEntry = computed(() => {
-    if (!selectedEntryId.value) return null
-    return filteredEntries.value.find((e) => e.id === selectedEntryId.value) ?? null
-  })
+  const entryMap = computed(() => new Map(entries.value.map((e) => [e.id, e])))
 
-  const selectedIndex = computed(() => {
-    if (!selectedEntryId.value) return -1
-    return filteredEntries.value.findIndex((e) => e.id === selectedEntryId.value)
-  })
+  const selectedEntry = computed(() =>
+    selectedEntryId.value ? (filteredEntries.value.find((e) => e.id === selectedEntryId.value) ?? null) : null,
+  )
+
+  const selectedIndex = computed(() =>
+    selectedEntryId.value ? filteredEntries.value.findIndex((e) => e.id === selectedEntryId.value) : -1,
+  )
 
   const hasPrevious = computed(() => currentPage.value > 1)
+  const searchQuery = computed(() => (filter.value.type === 'search' ? filter.value.query : ''))
+  const supportsUnreadToggle = computed(() =>
+    filter.value.type === 'all' || filter.value.type === 'feed' || filter.value.type === 'group' || filter.value.type === 'category',
+  )
+  const supportsMarkAllRead = supportsUnreadToggle
 
   // ---------------------------------------------------------------------------
-  // Internal helpers
+  // Fetching
   // ---------------------------------------------------------------------------
-
-  function _getUserId(): string {
-    const authStore = useAuthStore()
-    return authStore.user!.id
+  function _userId(): string {
+    return useAuthStore().user!.id
   }
 
-  /**
-   * Calls the appropriate Supabase RPC based on the current filter.
-   * Handles the different pagination styles per RPC.
-   */
-  async function _callRpc(
-    f: EntryFilter,
-    cursor?: { published_at: string; starred_at?: string | null; id: string },
-  ): Promise<Entry[]> {
-    const userId = _getUserId()
-    const ui = useUIStore()
-    const limit = ui.entriesPerPage
+  function _pageSize(): number {
+    return useUIStore().entriesPerPage
+  }
 
-    let rpcName: string
-    const params: Record<string, unknown> = { p_user_id: userId, p_limit: limit }
-
-    switch (f.type) {
-      case 'feed':
-        rpcName = 'get_feed_entries'
-        params.p_feed_id = f.feedId
-        params.p_unread_only = f.unreadOnly
-        if (cursor) {
-          params.p_cursor_published_at = cursor.published_at
-          params.p_cursor_id = cursor.id
-        }
-        break
-
-      case 'group':
-        rpcName = 'get_group_entries'
-        params.p_group_id = f.groupId
-        params.p_unread_only = f.unreadOnly
-        if (cursor) {
-          params.p_cursor_published_at = cursor.published_at
-          params.p_cursor_id = cursor.id
-        }
-        break
-
-      case 'category':
-        rpcName = 'get_category_entries'
-        params.p_category = f.category
-        params.p_unread_only = f.unreadOnly
-        if (cursor) {
-          params.p_cursor_published_at = cursor.published_at
-          params.p_cursor_id = cursor.id
-        }
-        break
-
-      case 'starred':
-        rpcName = 'get_starred_entries'
-        if (cursor) {
-          params.p_cursor_published_at = cursor.published_at
-          params.p_cursor_id = cursor.id
-        }
-        break
-
-      case 'star_tag':
-        rpcName = 'get_starred_entries_by_tag'
-        params.p_star_tag_id = f.starTagId
-        if (cursor) {
-          params.p_cursor_published_at = cursor.published_at
-          params.p_cursor_id = cursor.id
-        }
-        break
-
-      case 'search':
-        rpcName = f.scope === 'all' ? 'search_all_entries' : 'search_entries'
-        params.p_query = f.query
-        // search uses offset-based pagination, no p_unread_only
-        params.p_offset = searchOffset
-        break
-
-      case 'all':
-      default:
-        rpcName = 'get_all_entries'
-        params.p_unread_only = f.unreadOnly
-        if (cursor) {
-          params.p_cursor_published_at = cursor.published_at
-          params.p_cursor_id = cursor.id
-        }
-        break
+  async function _callRpc(f: EntryFilter, cursor?: Cursor): Promise<Entry[]> {
+    const { name, params, paged } = rpcFor(f)
+    const body: Record<string, unknown> = { p_user_id: _userId(), p_limit: _pageSize(), ...params }
+    if (paged === 'offset') body.p_offset = searchOffset
+    else if (cursor) {
+      body.p_cursor_published_at = cursor.published_at
+      body.p_cursor_id = cursor.id
     }
 
-    const { data, error: rpcError } = await supabase.rpc(rpcName, params)
-
+    const { data, error: rpcError } = await supabase.rpc(name, body)
     if (rpcError) throw rpcError
 
     const rows = (data ?? []) as Entry[]
     for (const row of rows) {
       row.title = decodeHtml(row.title)
       row.feed_title = decodeHtml(row.feed_title)
+      row.plain_text = stripHtml(row.content_html)
+      row.excerpt = truncate(stripHtml(row.summary) || row.plain_text, 500)
     }
     return rows
   }
 
-  // ---------------------------------------------------------------------------
-  // Actions
-  // ---------------------------------------------------------------------------
-
-  function _autoApplyFilters(): void {
-    const filterStore = useFilterStore()
-    const markReadRules = filterStore.enabledFilters.filter((f) => f.action === 'mark_read')
-    const autoStarRules = filterStore.enabledFilters.filter((f) => f.action === 'auto_star')
-
-    if (markReadRules.length === 0 && autoStarRules.length === 0) return
-
-    for (const entry of entries.value) {
-      if (!entry.read_at && markReadRules.some((rule) => _entryMatchesKeyword(rule, entry))) {
-        markRead(entry.id)
-      }
-      if (!entry.starred_at && autoStarRules.length > 0) {
-        const matchedRule = autoStarRules.find((rule) => _entryMatchesKeyword(rule, entry))
-        if (matchedRule) {
-          toggleStar(entry.id, matchedRule.star_tag_id)
-        }
-      }
-    }
+  function _cursorAfter(list: Entry[]): Cursor | undefined {
+    const last = list[list.length - 1]
+    return last ? { published_at: last.published_at, id: last.id } : undefined
   }
 
   async function fetchEntries(newFilter: EntryFilter): Promise<void> {
-    const ui = useUIStore()
+    const seq = ++fetchSeq
     loading.value = true
     error.value = null
     filter.value = newFilter
@@ -249,470 +161,378 @@ export const useEntryStore = defineStore('entries', () => {
 
     try {
       const rows = await _callRpc(newFilter)
+      if (seq !== fetchSeq) return
       entries.value = rows
-      hasMore.value = rows.length >= ui.entriesPerPage
-      if (newFilter.type === 'search') {
-        searchOffset = rows.length
-      }
-      _autoApplyFilters()
+      hasMore.value = rows.length >= _pageSize()
+      if (newFilter.type === 'search') searchOffset = rows.length
+      _autoApplyFilters(rows)
     } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch entries'
+      if (seq === fetchSeq) error.value = errorText(err, 'Failed to fetch entries')
     } finally {
-      loading.value = false
+      if (seq === fetchSeq) loading.value = false
     }
+  }
+
+  /** Re-run the current filter with a different unread setting (list-type permitting). */
+  async function setUnreadOnly(unreadOnly: boolean): Promise<void> {
+    const f = filter.value
+    if (f.type === 'all' || f.type === 'feed' || f.type === 'group' || f.type === 'category') {
+      await fetchEntries({ ...f, unreadOnly })
+    }
+  }
+
+  async function refresh(): Promise<void> {
+    await fetchEntries(filter.value)
   }
 
   async function fetchMore(): Promise<void> {
     if (loadingMore.value || !hasMore.value || entries.value.length === 0) return
-
+    const seq = fetchSeq
     loadingMore.value = true
     error.value = null
 
     try {
-      let rows: Entry[]
-
-      if (filter.value.type === 'search') {
-        // Offset-based for search
-        rows = await _callRpc(filter.value)
-      } else {
-        // Cursor-based for everything else
-        const lastEntry = entries.value[entries.value.length - 1]!
-        const cursor = {
-          published_at: lastEntry.published_at ?? lastEntry.created_at,
-          starred_at: lastEntry.starred_at,
-          id: lastEntry.id,
-        }
-        rows = await _callRpc(filter.value, cursor)
-      }
-
-      const ui = useUIStore()
+      const rows = await _callRpc(filter.value, _cursorAfter(entries.value))
+      if (seq !== fetchSeq) return
       entries.value.push(...rows)
-      hasMore.value = rows.length >= ui.entriesPerPage
-      if (filter.value.type === 'search') {
-        searchOffset += rows.length
-      }
-      _autoApplyFilters()
+      hasMore.value = rows.length >= _pageSize()
+      if (filter.value.type === 'search') searchOffset += rows.length
+      _autoApplyFilters(rows)
     } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to load more entries'
+      if (seq === fetchSeq) error.value = errorText(err, 'Failed to load more entries')
     } finally {
-      loadingMore.value = false
+      if (seq === fetchSeq) loadingMore.value = false
     }
   }
 
   async function fetchPage(direction: 'next' | 'prev'): Promise<void> {
-    const ui = useUIStore()
-
     if (direction === 'next' && !hasMore.value) return
     if (direction === 'prev' && currentPage.value <= 1) return
 
+    const seq = ++fetchSeq
     loading.value = true
     error.value = null
     selectedEntryId.value = null
 
     try {
+      let cursor: Cursor | undefined
       if (direction === 'next') {
-        // Save the cursor for the next page
-        const lastEntry = entries.value[entries.value.length - 1]!
-        const nextCursor = {
-          published_at: lastEntry.published_at ?? lastEntry.created_at,
-          starred_at: lastEntry.starred_at,
-          id: lastEntry.id,
-        }
+        cursor = _cursorAfter(entries.value)
         currentPage.value++
-        pageCursors[currentPage.value - 1] = nextCursor
-
-        if (filter.value.type === 'search') {
-          searchOffset = (currentPage.value - 1) * ui.entriesPerPage
-          const rows = await _callRpc(filter.value)
-          entries.value = rows
-          hasMore.value = rows.length >= ui.entriesPerPage
-        } else {
-          const rows = await _callRpc(filter.value, nextCursor)
-          entries.value = rows
-          hasMore.value = rows.length >= ui.entriesPerPage
-        }
+        pageCursors[currentPage.value - 1] = cursor ?? null
       } else {
-        // Go to previous page using saved cursor
         currentPage.value--
-        const cursor = pageCursors[currentPage.value - 1] ?? undefined
-
-        if (filter.value.type === 'search') {
-          searchOffset = (currentPage.value - 1) * ui.entriesPerPage
-          const rows = await _callRpc(filter.value)
-          entries.value = rows
-          hasMore.value = rows.length >= ui.entriesPerPage
-        } else {
-          const rows = await _callRpc(filter.value, cursor ?? undefined)
-          entries.value = rows
-          hasMore.value = rows.length >= ui.entriesPerPage
-        }
+        cursor = pageCursors[currentPage.value - 1] ?? undefined
       }
+      if (filter.value.type === 'search') searchOffset = (currentPage.value - 1) * _pageSize()
+
+      const rows = await _callRpc(filter.value, cursor)
+      if (seq !== fetchSeq) return
+      entries.value = rows
+      hasMore.value = rows.length >= _pageSize()
+      _autoApplyFilters(rows)
     } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to load page'
+      if (seq === fetchSeq) error.value = errorText(err, 'Failed to load page')
     } finally {
-      loading.value = false
-    }
-  }
-
-  async function markRead(entryId: string): Promise<void> {
-    const entry = entries.value.find((e) => e.id === entryId)
-    if (!entry || entry.read_at) return
-
-    error.value = null
-
-    try {
-      const now = new Date().toISOString()
-      const userId = _getUserId()
-
-      const { error: upsertError } = await supabase
-        .from('user_entry_status')
-        .upsert(
-          { user_id: userId, entry_id: entryId, read_at: now },
-          { onConflict: 'user_id,entry_id' },
-        )
-
-      if (upsertError) throw upsertError
-
-      entry.read_at = now
-
-      const feedStore = useFeedStore()
-      feedStore.updateUnreadCount(entry.feed_id, -1)
-      const groupStore = useGroupStore()
-      groupStore.updateUnreadCountForFeed(entry.feed_id, -1)
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to mark entry as read'
-    }
-  }
-
-  async function toggleRead(entryId: string): Promise<void> {
-    const entry = entries.value.find((e) => e.id === entryId)
-    if (!entry) return
-
-    error.value = null
-
-    try {
-      const newReadAt = entry.read_at ? null : new Date().toISOString()
-      const userId = _getUserId()
-
-      const { error: upsertError } = await supabase
-        .from('user_entry_status')
-        .upsert(
-          { user_id: userId, entry_id: entryId, read_at: newReadAt },
-          { onConflict: 'user_id,entry_id' },
-        )
-
-      if (upsertError) throw upsertError
-
-      const delta = entry.read_at ? 1 : -1
-      entry.read_at = newReadAt
-
-      const feedStore = useFeedStore()
-      feedStore.updateUnreadCount(entry.feed_id, delta)
-      const groupStore = useGroupStore()
-      groupStore.updateUnreadCountForFeed(entry.feed_id, delta)
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to toggle read status'
-    }
-  }
-
-  async function toggleStar(entryId: string, starTagId?: string | null): Promise<void> {
-    const entry = entries.value.find((e) => e.id === entryId)
-    if (!entry) return
-
-    error.value = null
-
-    try {
-      const isUnstarring = !!entry.starred_at
-      const newStarredAt = isUnstarring ? null : new Date().toISOString()
-      const newStarTagId = isUnstarring ? null : (starTagId ?? null)
-      const userId = _getUserId()
-
-      const { error: upsertError } = await supabase
-        .from('user_entry_status')
-        .upsert(
-          {
-            user_id: userId,
-            entry_id: entryId,
-            starred_at: newStarredAt,
-            star_tag_id: newStarTagId,
-          },
-          { onConflict: 'user_id,entry_id' },
-        )
-
-      if (upsertError) throw upsertError
-
-      entry.starred_at = newStarredAt
-      entry.star_tag_id = newStarTagId
-
-      // Update star tag unread counts
-      if (isUnstarring && entry.star_tag_id) {
-        // Was tagged — handled above via null assignment
-      }
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to toggle star'
-    }
-  }
-
-  async function unstarByTag(starTagId: string): Promise<void> {
-    error.value = null
-    try {
-      const userId = _getUserId()
-      const { error: updateError } = await supabase
-        .from('user_entry_status')
-        .update({ starred_at: null, star_tag_id: null })
-        .eq('user_id', userId)
-        .eq('star_tag_id', starTagId)
-        .not('starred_at', 'is', null)
-
-      if (updateError) throw updateError
-
-      // Update local entries that had this tag
-      for (const entry of entries.value) {
-        if (entry.star_tag_id === starTagId && entry.starred_at) {
-          entry.starred_at = null
-          entry.star_tag_id = null
-        }
-      }
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to unstar entries'
-    }
-  }
-
-  async function markAllRead(): Promise<void> {
-    if (filter.value.type === 'search') return
-
-    error.value = null
-    markingAllRead.value = true
-
-    try {
-      const userId = _getUserId()
-      const params: Record<string, unknown> = { p_user_id: userId }
-
-      let rpcName: string
-
-      switch (filter.value.type) {
-        case 'feed':
-          rpcName = 'mark_feed_as_read'
-          params.p_feed_id = filter.value.feedId
-          break
-        case 'group':
-          rpcName = 'mark_group_as_read'
-          params.p_group_id = filter.value.groupId
-          break
-        case 'category':
-          rpcName = 'mark_category_as_read'
-          params.p_category = filter.value.category
-          break
-        default:
-          rpcName = 'mark_all_as_read'
-          break
-      }
-
-      const { error: rpcError } = await supabase.rpc(rpcName, params)
-      if (rpcError) throw rpcError
-
-      const now = new Date().toISOString()
-      for (const entry of entries.value) {
-        if (!entry.read_at) {
-          entry.read_at = now
-        }
-      }
-
-      // Re-fetch everything to reflect server state
-      const feedStore = useFeedStore()
-      const groupStore = useGroupStore()
-      await Promise.all([
-        fetchEntries(filter.value),
-        feedStore.fetchFeeds(),
-        groupStore.fetchGroups(),
-      ])
-    } catch (err: unknown) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to mark all entries as read'
-    } finally {
-      markingAllRead.value = false
-    }
-  }
-
-  async function markFeedAsRead(feedId: string): Promise<void> {
-    try {
-      const userId = _getUserId()
-      const { error: rpcError } = await supabase.rpc('mark_feed_as_read', {
-        p_user_id: userId,
-        p_feed_id: feedId,
-      })
-      if (rpcError) throw rpcError
-
-      const feedStore = useFeedStore()
-      const oldCount = feedStore.feedById(feedId)?.unread_count ?? 0
-      feedStore.updateUnreadCount(feedId, -oldCount)
-      const groupStore = useGroupStore()
-      groupStore.updateUnreadCountForFeed(feedId, -oldCount)
-
-      // Update any visible entries belonging to this feed
-      const now = new Date().toISOString()
-      for (const entry of entries.value) {
-        if (entry.feed_id === feedId && !entry.read_at) entry.read_at = now
-      }
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to mark feed as read'
-    }
-  }
-
-  async function markGroupAsRead(groupId: string): Promise<void> {
-    try {
-      const userId = _getUserId()
-      const { error: rpcError } = await supabase.rpc('mark_group_as_read', {
-        p_user_id: userId,
-        p_group_id: groupId,
-      })
-      if (rpcError) throw rpcError
-
-      const feedStore = useFeedStore()
-      const groupStore = useGroupStore()
-      const feedIds = groupStore.feedsByGroup(groupId)
-      for (const fid of feedIds) {
-        const oldCount = feedStore.feedById(fid)?.unread_count ?? 0
-        feedStore.updateUnreadCount(fid, -oldCount)
-      }
-
-      // Update group unread count locally
-      const group = groupStore.groups.find((g) => g.id === groupId)
-      if (group) group.unread_count = 0
-
-      // Update any visible entries belonging to feeds in this group
-      const feedIdSet = new Set(feedIds)
-      const now = new Date().toISOString()
-      for (const entry of entries.value) {
-        if (feedIdSet.has(entry.feed_id) && !entry.read_at) entry.read_at = now
-      }
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to mark group as read'
-    }
-  }
-
-  async function markCategoryAsRead(category: string): Promise<void> {
-    try {
-      const userId = _getUserId()
-      const { error: rpcError } = await supabase.rpc('mark_category_as_read', {
-        p_user_id: userId,
-        p_category: category,
-      })
-      if (rpcError) throw rpcError
-
-      const feedStore = useFeedStore()
-      const groupStore = useGroupStore()
-      const feedsInCat = feedStore.feeds.filter((f) => (f.category || 'other') === category)
-      for (const feed of feedsInCat) {
-        groupStore.updateUnreadCountForFeed(feed.id, -feed.unread_count)
-        feedStore.updateUnreadCount(feed.id, -feed.unread_count)
-      }
-
-      // Update any visible entries belonging to feeds in this category
-      const feedIdSet = new Set(feedsInCat.map((f) => f.id))
-      const now = new Date().toISOString()
-      for (const entry of entries.value) {
-        if (feedIdSet.has(entry.feed_id) && !entry.read_at) entry.read_at = now
-      }
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to mark category as read'
-    }
-  }
-
-  function selectEntry(id: string | null): void {
-    selectedEntryId.value = id
-
-    if (markReadTimer) {
-      clearTimeout(markReadTimer)
-      markReadTimer = null
-    }
-
-    const ui = useUIStore()
-    if (id) {
-      ui.openReader()
-      markReadTimer = setTimeout(() => {
-        markRead(id)
-      }, 1000)
-    } else {
-      ui.closeReader()
+      if (seq === fetchSeq) loading.value = false
     }
   }
 
   /**
-   * Re-fetches the current page of entries without clearing the list or
-   * resetting scroll position. Used for background refresh (e.g. tab return).
+   * Re-fetch the current page without clearing the list or scroll position
+   * (tab return, reconnect). In infinite mode new rows are merged in at the top.
    */
   async function silentRefresh(): Promise<void> {
     if (loading.value || loadingMore.value) return
-
     const ui = useUIStore()
-
-    // Skip when reader is open — mutating entries risks orphaning the selected article
     if (ui.readerOpen && selectedEntryId.value) return
 
+    const seq = fetchSeq
     try {
       const isInfinite = ui.paginationMode === 'infinite'
       const isSearch = filter.value.type === 'search'
 
       if (isInfinite && !isSearch && entries.value.length > 0) {
-        // Merge page-1 results into the existing infinite-scroll array
-        const rows = await _callRpc(filter.value, undefined)
-        const existing = new Map(entries.value.map((e) => [e.id, e]))
-
-        const newEntries: Entry[] = []
+        const rows = await _callRpc(filter.value)
+        if (seq !== fetchSeq) return
+        const fresh: Entry[] = []
         for (const row of rows) {
-          const old = existing.get(row.id)
-          if (old) {
-            old.read_at = row.read_at
-            old.starred_at = row.starred_at
+          const existing = entryMap.value.get(row.id)
+          if (existing) {
+            existing.read_at = row.read_at
+            existing.starred_at = row.starred_at
+            existing.star_tag_id = row.star_tag_id
           } else {
-            newEntries.push(row)
+            fresh.push(row)
           }
         }
-
-        if (newEntries.length > 0) {
-          entries.value.unshift(...newEntries)
+        if (fresh.length > 0) {
+          entries.value.unshift(...fresh)
+          _autoApplyFilters(fresh)
         }
-        // Leave hasMore unchanged — the tail of the array hasn't changed
       } else {
-        // Paginated mode, search, or empty array — replace entirely (current behavior)
-        const cursor = pageCursors[currentPage.value - 1] ?? undefined
-
-        if (isSearch) {
-          searchOffset = (currentPage.value - 1) * ui.entriesPerPage
-        }
-
-        const rows = await _callRpc(filter.value, cursor)
+        if (isSearch) searchOffset = (currentPage.value - 1) * _pageSize()
+        const rows = await _callRpc(filter.value, pageCursors[currentPage.value - 1] ?? undefined)
+        if (seq !== fetchSeq) return
         entries.value = rows
-        hasMore.value = rows.length >= ui.entriesPerPage
-
-        if (isSearch) {
-          searchOffset = (currentPage.value - 1) * ui.entriesPerPage + rows.length
-        }
+        hasMore.value = rows.length >= _pageSize()
+        if (isSearch) searchOffset += rows.length
       }
     } catch {
-      // Silent refresh is best-effort; don't overwrite existing error state
+      // Best effort; keep whatever is on screen.
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Read / star state: optimistic local updates, batched writes
+  // ---------------------------------------------------------------------------
+  const pendingRead = new Map<string, string | null>()
+  const pendingStar = new Map<string, { starred_at: string | null; star_tag_id: string | null }>()
+  /** First-seen values for rollback if the batched write fails. */
+  const rollback = new Map<string, Pick<Entry, 'read_at' | 'starred_at' | 'star_tag_id'>>()
+  let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+  function _remember(entry: Entry): void {
+    if (!rollback.has(entry.id)) {
+      rollback.set(entry.id, { read_at: entry.read_at, starred_at: entry.starred_at, star_tag_id: entry.star_tag_id })
+    }
+  }
+
+  /** Mutate read state locally and keep every derived count in step. */
+  function _setRead(entry: Entry, readAt: string | null): void {
+    if (!!entry.read_at === !!readAt) {
+      entry.read_at = readAt
+      return
+    }
+    const delta = readAt ? -1 : 1
+    entry.read_at = readAt
+    useFeedStore().adjustUnread(entry.feed_id, delta)
+    if (entry.starred_at && entry.star_tag_id) useStarTagStore().adjustUnread(entry.star_tag_id, delta)
+  }
+
+  /** Mutate star state locally and keep tag unread counts in step. */
+  function _setStar(entry: Entry, starredAt: string | null, tagId: string | null): void {
+    const tags = useStarTagStore()
+    const wasCounted = !entry.read_at && !!entry.starred_at && !!entry.star_tag_id
+    const willBeCounted = !entry.read_at && !!starredAt && !!tagId
+    if (wasCounted && entry.star_tag_id !== tagId) tags.adjustUnread(entry.star_tag_id!, -1)
+    if (willBeCounted && entry.star_tag_id !== tagId) tags.adjustUnread(tagId!, 1)
+    entry.starred_at = starredAt
+    entry.star_tag_id = tagId
+  }
+
+  function _scheduleFlush(): void {
+    if (flushTimer) clearTimeout(flushTimer)
+    flushTimer = setTimeout(() => void flushStatus(), STATUS_FLUSH_DELAY)
+  }
+
+  /** Send every queued read/star change in at most two upserts. */
+  async function flushStatus(): Promise<void> {
+    if (flushTimer) {
+      clearTimeout(flushTimer)
+      flushTimer = null
+    }
+    if (pendingRead.size === 0 && pendingStar.size === 0) return
+
+    const userId = _userId()
+    const reads = [...pendingRead].map(([entry_id, read_at]) => ({ user_id: userId, entry_id, read_at }))
+    const stars = [...pendingStar].map(([entry_id, s]) => ({ user_id: userId, entry_id, ...s }))
+    const touched = new Set([...pendingRead.keys(), ...pendingStar.keys()])
+    pendingRead.clear()
+    pendingStar.clear()
+
+    const ops = []
+    if (reads.length) ops.push(supabase.from('user_entry_status').upsert(reads, { onConflict: 'user_id,entry_id' }))
+    if (stars.length) ops.push(supabase.from('user_entry_status').upsert(stars, { onConflict: 'user_id,entry_id' }))
+
+    const results = await Promise.all(ops)
+    const failure = results.find((r) => r.error)?.error
+
+    if (failure) {
+      error.value = failure.message || 'Failed to save read/star state'
+      for (const id of touched) {
+        const prev = rollback.get(id)
+        const entry = entryMap.value.get(id)
+        if (prev && entry) {
+          _setRead(entry, prev.read_at)
+          _setStar(entry, prev.starred_at, prev.star_tag_id)
+        }
+      }
+    }
+    for (const id of touched) rollback.delete(id)
+  }
+
+  function markRead(entryId: string): void {
+    const entry = entryMap.value.get(entryId)
+    if (!entry || entry.read_at) return
+    _remember(entry)
+    const now = new Date().toISOString()
+    _setRead(entry, now)
+    pendingRead.set(entryId, now)
+    _scheduleFlush()
+  }
+
+  function toggleRead(entryId: string): void {
+    const entry = entryMap.value.get(entryId)
+    if (!entry) return
+    _remember(entry)
+    const readAt = entry.read_at ? null : new Date().toISOString()
+    _setRead(entry, readAt)
+    pendingRead.set(entryId, readAt)
+    _scheduleFlush()
+  }
+
+  function toggleStar(entryId: string, starTagId?: string | null): void {
+    const entry = entryMap.value.get(entryId)
+    if (!entry) return
+    _remember(entry)
+    const unstar = !!entry.starred_at
+    const starredAt = unstar ? null : new Date().toISOString()
+    const tagId = unstar ? null : (starTagId ?? null)
+    _setStar(entry, starredAt, tagId)
+    pendingStar.set(entryId, { starred_at: starredAt, star_tag_id: tagId })
+    _scheduleFlush()
+  }
+
+  async function unstarByTag(starTagId: string): Promise<void> {
+    await flushStatus()
+    const { error: updateError } = await supabase
+      .from('user_entry_status')
+      .update({ starred_at: null, star_tag_id: null })
+      .eq('user_id', _userId())
+      .eq('star_tag_id', starTagId)
+      .not('starred_at', 'is', null)
+    if (updateError) throw updateError
+
+    for (const entry of entries.value) {
+      if (entry.star_tag_id === starTagId && entry.starred_at) {
+        entry.starred_at = null
+        entry.star_tag_id = null
+      }
+    }
+    useStarTagStore().setUnreadCount(starTagId, 0)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scope-wide mark as read
+  // ---------------------------------------------------------------------------
+
+  /** Mark visible entries matching `predicate` read locally and zero the given feeds' counts. */
+  function _applyScopeRead(feedIds: Iterable<string> | 'all', predicate: (e: Entry) => boolean): void {
+    const feedStore = useFeedStore()
+    const now = new Date().toISOString()
+    for (const entry of entries.value) {
+      if (!entry.read_at && predicate(entry)) {
+        entry.read_at = now
+        if (entry.starred_at && entry.star_tag_id) useStarTagStore().adjustUnread(entry.star_tag_id, -1)
+      }
+    }
+    if (feedIds === 'all') for (const f of feedStore.feeds) f.unread_count = 0
+    else for (const id of feedIds) feedStore.setUnreadCount(id, 0)
+  }
+
+  async function _markScope(rpc: string, params: Record<string, unknown>, feedIds: Iterable<string> | 'all', predicate: (e: Entry) => boolean): Promise<void> {
+    await flushStatus()
+    const { error: rpcError } = await supabase.rpc(rpc, { p_user_id: _userId(), ...params })
+    if (rpcError) throw rpcError
+    _applyScopeRead(feedIds, predicate)
+    // Tag counts for entries not on screen can only be corrected by the server.
+    void useFeedStore().refreshCounts()
+  }
+
+  async function markFeedAsRead(feedId: string): Promise<void> {
+    await _markScope('mark_feed_as_read', { p_feed_id: feedId }, [feedId], (e) => e.feed_id === feedId)
+  }
+
+  async function markGroupAsRead(groupId: string): Promise<void> {
+    const set = useGroupStore().groupFeedSets.get(groupId) ?? new Set<string>()
+    await _markScope('mark_group_as_read', { p_group_id: groupId }, set, (e) => set.has(e.feed_id))
+  }
+
+  async function markCategoryAsRead(category: string): Promise<void> {
+    const ids = new Set(useFeedStore().feeds.filter((f) => (f.category || 'other') === category).map((f) => f.id))
+    await _markScope('mark_category_as_read', { p_category: category }, ids, (e) => ids.has(e.feed_id))
+  }
+
+  async function markEverythingAsRead(): Promise<void> {
+    await _markScope('mark_all_as_read', {}, 'all', () => true)
+  }
+
+  /** "Mark all read" for whatever list is on screen. */
+  async function markAllRead(): Promise<void> {
+    const f = filter.value
+    if (!supportsMarkAllRead.value) return
+    markingAllRead.value = true
+    error.value = null
+    try {
+      if (f.type === 'feed') await markFeedAsRead(f.feedId)
+      else if (f.type === 'group') await markGroupAsRead(f.groupId)
+      else if (f.type === 'category') await markCategoryAsRead(f.category)
+      else await markEverythingAsRead()
+    } catch (err: unknown) {
+      error.value = errorText(err, 'Failed to mark entries as read')
+      throw err
+    } finally {
+      markingAllRead.value = false
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auto rules for entries that arrive on the client
+  // ---------------------------------------------------------------------------
+  function _autoApplyFilters(rows: Entry[]): void {
+    const { markReadRules, autoStarRules } = useFilterStore()
+    if (markReadRules.length === 0 && autoStarRules.length === 0) return
+
+    for (const entry of rows) {
+      if (!entry.read_at && markReadRules.some((r) => _ruleMatches(r, entry))) markRead(entry.id)
+      if (!entry.starred_at) {
+        const rule = autoStarRules.find((r) => _ruleMatches(r, entry))
+        if (rule) toggleStar(entry.id, rule.star_tag_id)
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Selection
+  // ---------------------------------------------------------------------------
+  function selectEntry(id: string | null): void {
+    selectedEntryId.value = id
+    if (markReadTimer) {
+      clearTimeout(markReadTimer)
+      markReadTimer = null
+    }
+    const ui = useUIStore()
+    if (id) {
+      ui.openReader()
+      markReadTimer = setTimeout(() => markRead(id), MARK_READ_DELAY)
+    } else {
+      ui.closeReader()
     }
   }
 
   function selectNext(): void {
-    if (filteredEntries.value.length === 0) return
-
-    const currentIndex = selectedIndex.value
-    if (currentIndex < 0) {
-      selectEntry(filteredEntries.value[0]!.id)
-    } else if (currentIndex < filteredEntries.value.length - 1) {
-      selectEntry(filteredEntries.value[currentIndex + 1]!.id)
-    }
+    const list = filteredEntries.value
+    if (list.length === 0) return
+    const i = selectedIndex.value
+    if (i < 0) selectEntry(list[0]!.id)
+    else if (i < list.length - 1) selectEntry(list[i + 1]!.id)
   }
 
   function selectPrevious(): void {
-    if (filteredEntries.value.length === 0) return
+    const i = selectedIndex.value
+    if (i > 0) selectEntry(filteredEntries.value[i - 1]!.id)
+  }
 
-    const currentIndex = selectedIndex.value
-    if (currentIndex > 0) {
-      selectEntry(filteredEntries.value[currentIndex - 1]!.id)
-    }
+  function reset(): void {
+    fetchSeq++
+    entries.value = []
+    selectedEntryId.value = null
+    filter.value = { type: 'all', unreadOnly: false }
+    error.value = null
+    pendingRead.clear()
+    pendingStar.clear()
+    rollback.clear()
   }
 
   return {
@@ -731,21 +551,28 @@ export const useEntryStore = defineStore('entries', () => {
     selectedEntry,
     selectedIndex,
     hasPrevious,
+    searchQuery,
+    supportsUnreadToggle,
+    supportsMarkAllRead,
     // Actions
     fetchEntries,
+    setUnreadOnly,
+    refresh,
     fetchMore,
     fetchPage,
+    silentRefresh,
     markRead,
     toggleRead,
     toggleStar,
+    flushStatus,
+    unstarByTag,
     markAllRead,
     markFeedAsRead,
     markGroupAsRead,
     markCategoryAsRead,
-    silentRefresh,
-    unstarByTag,
     selectEntry,
     selectNext,
     selectPrevious,
+    reset,
   }
 })

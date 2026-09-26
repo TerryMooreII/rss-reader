@@ -1,77 +1,76 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { FEED_CATEGORIES } from '@/config/constants'
 import { useFeedStore } from '@/stores/feeds'
 import { useNotificationStore } from '@/stores/notifications'
-import { supabase } from '@/config/supabase'
-import { useAuthStore } from '@/stores/auth'
-import type { Feed } from '@/types/models'
-import {
-  MagnifyingGlassIcon,
-  PlusIcon,
-  CheckIcon,
-  RssIcon,
-  Bars3Icon,
-  ChevronRightIcon,
-  ChevronDownIcon,
-} from '@heroicons/vue/24/outline'
 import { useUIStore } from '@/stores/ui'
+import { supabase } from '@/config/supabase'
+import type { Feed } from '@/types/models'
+import { formatTimeAgo } from '@/utils/date'
+import { MagnifyingGlassIcon, PlusIcon, CheckIcon, ChevronRightIcon, ChevronDownIcon } from '@heroicons/vue/24/outline'
 import GroupSelector from '@/components/common/GroupSelector.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import FeedFavicon from '@/components/ui/FeedFavicon.vue'
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
+
+type DiscoverFeed = Pick<Feed, 'id' | 'url' | 'title' | 'description' | 'favicon_url' | 'category' | 'subscriber_count'>
+interface PreviewEntry {
+  title: string | null
+  url: string | null
+  published_at: string | null
+  author: string | null
+}
 
 const ui = useUIStore()
 const feedStore = useFeedStore()
-const authStore = useAuthStore()
 const notifications = useNotificationStore()
-
-const faviconErrors = ref(new Set<string>())
 
 const searchQuery = ref('')
 const selectedCategory = ref<string | null>(null)
-const feeds = ref<(Feed & { subscriber_count?: number })[]>([])
+const feeds = ref<DiscoverFeed[]>([])
 const loading = ref(false)
-
 const actionLoading = ref<string | null>(null)
 const groupPickerFeedId = ref<string | null>(null)
 
 // Expandable preview state
 const expandedFeedId = ref<string | null>(null)
-const previewEntries = ref<Record<string, { title: string; url: string | null; published_at: string | null; author: string | null }[]>>({})
+const previewEntries = ref<Record<string, PreviewEntry[]>>({})
 const previewLoading = ref<string | null>(null)
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
+let loadSeq = 0
+
+/** PostgREST `ilike` treats % and _ as wildcards; escape user input. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`)
+}
 
 async function loadFeeds() {
+  const seq = ++loadSeq
   loading.value = true
   try {
     let query = supabase
       .from('feeds')
-      .select('*')
+      .select('id, url, title, description, favicon_url, category, subscriber_count')
       .eq('is_private', false)
       .eq('status', 'active')
       .order('subscriber_count', { ascending: false })
       .order('title', { ascending: true })
       .limit(50)
 
-    if (selectedCategory.value) {
-      query = query.eq('category', selectedCategory.value)
-    }
-
-    if (searchQuery.value.trim()) {
-      query = query.ilike('title', `%${searchQuery.value.trim()}%`)
-    }
+    if (selectedCategory.value) query = query.eq('category', selectedCategory.value)
+    const q = searchQuery.value.trim()
+    if (q) query = query.ilike('title', `%${escapeLike(q)}%`)
 
     const { data, error } = await query
     if (error) throw error
-    feeds.value = data || []
-  } catch (e: any) {
-    notifications.error('Failed to load feeds')
+    if (seq !== loadSeq) return
+    feeds.value = (data ?? []) as DiscoverFeed[]
+  } catch {
+    if (seq === loadSeq) notifications.error('Failed to load feeds')
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
-}
-
-function isSubscribed(feedId: string) {
-  return feedStore.feeds.some((f) => f.id === feedId)
 }
 
 async function subscribe(feedId: string) {
@@ -79,21 +78,39 @@ async function subscribe(feedId: string) {
   try {
     await feedStore.subscribeFeed(feedId)
     notifications.success('Subscribed!')
-  } catch (e: any) {
-    notifications.error(e.message || 'Failed to subscribe')
+  } catch (e) {
+    notifications.error(e instanceof Error ? e.message : 'Failed to subscribe')
   } finally {
     actionLoading.value = null
   }
 }
 
-function makeSubscriber(feedId: string) {
-  return async () => {
-    if (isSubscribed(feedId)) return
-    await feedStore.subscribeFeed(feedId)
+async function unsubscribe(feedId: string) {
+  actionLoading.value = feedId
+  try {
+    await feedStore.unsubscribeFeed(feedId)
+    notifications.success('Unsubscribed')
+  } catch (e) {
+    notifications.error(e instanceof Error ? e.message : 'Failed to unsubscribe')
+  } finally {
+    actionLoading.value = null
   }
 }
 
-async function fetchPreviewEntries(feedId: string) {
+// One stable subscriber per feed so GroupSelector's prop doesn't change every render.
+const subscribers = new Map<string, () => Promise<void>>()
+function subscriberFor(feedId: string) {
+  let fn = subscribers.get(feedId)
+  if (!fn) {
+    fn = async () => {
+      if (!feedStore.isSubscribed(feedId)) await feedStore.subscribeFeed(feedId)
+    }
+    subscribers.set(feedId, fn)
+  }
+  return fn
+}
+
+async function fetchPreviewEntries(feedId: string): Promise<PreviewEntry[]> {
   const { data, error } = await supabase
     .from('entries')
     .select('title, url, published_at, author')
@@ -101,7 +118,7 @@ async function fetchPreviewEntries(feedId: string) {
     .order('published_at', { ascending: false })
     .limit(5)
   if (error) throw error
-  return data || []
+  return (data ?? []) as PreviewEntry[]
 }
 
 async function togglePreview(feedId: string) {
@@ -110,24 +127,16 @@ async function togglePreview(feedId: string) {
     return
   }
   expandedFeedId.value = feedId
-
-  // Skip fetch if we already have entries cached
   if (previewEntries.value[feedId]) return
 
   previewLoading.value = feedId
   try {
     let entries = await fetchPreviewEntries(feedId)
-
-    // If no entries exist, try fetching them on-demand via edge function
+    // Never polled yet: fetch on demand so the preview isn't empty.
     if (entries.length === 0) {
-      const { error: fnError } = await supabase.functions.invoke('fetch-feed-entries', {
-        body: { feed_id: feedId },
-      })
-      if (!fnError) {
-        entries = await fetchPreviewEntries(feedId)
-      }
+      const { error } = await supabase.functions.invoke('fetch-feed-entries', { body: { feed_id: feedId } })
+      if (!error) entries = await fetchPreviewEntries(feedId)
     }
-
     previewEntries.value[feedId] = entries
   } catch {
     previewEntries.value[feedId] = []
@@ -136,76 +145,34 @@ async function togglePreview(feedId: string) {
   }
 }
 
-function previewTimeAgo(dateStr: string | null): string {
-  if (!dateStr) return ''
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  return `${months}mo ago`
-}
-
-async function unsubscribe(feedId: string) {
-  actionLoading.value = feedId
-  try {
-    await feedStore.unsubscribeFeed(feedId)
-    notifications.success('Unsubscribed')
-  } catch (e: any) {
-    notifications.error(e.message || 'Failed to unsubscribe')
-  } finally {
-    actionLoading.value = null
-  }
-}
-
 watch(selectedCategory, () => loadFeeds())
-
 watch(searchQuery, () => {
   if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(loadFeeds, 300)
 })
 
 onMounted(loadFeeds)
+onUnmounted(() => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+})
 </script>
 
 <template>
   <div class="flex-1 overflow-y-auto">
     <div class="mx-auto max-w-3xl px-4 py-6">
-      <div class="flex items-center gap-2 mb-6">
-        <button
-          class="rounded-lg p-1.5 text-text-muted hover:bg-bg-hover hover:text-text-primary md:hidden"
-          @click="ui.toggleSidebar()"
-        >
-          <Bars3Icon class="h-5 w-5" />
-        </button>
-        <h1 class="text-2xl font-bold text-text-primary">Discover Feeds</h1>
-      </div>
+      <PageHeader title="Discover Feeds" />
 
       <!-- Search -->
       <div class="relative mb-6">
-        <MagnifyingGlassIcon
-          class="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted"
-        />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search feeds..."
-          class="input pl-10"
-        />
+        <MagnifyingGlassIcon class="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted" />
+        <input v-model="searchQuery" type="text" placeholder="Search feeds..." class="input pl-10" />
       </div>
 
       <!-- Categories -->
       <div class="mb-6 flex flex-wrap gap-2">
         <button
           class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
-          :class="
-            !selectedCategory
-              ? 'bg-accent text-white'
-              : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-          "
+          :class="!selectedCategory ? 'bg-accent text-white' : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'"
           @click="selectedCategory = null"
         >
           All
@@ -214,11 +181,7 @@ onMounted(loadFeeds)
           v-for="cat in FEED_CATEGORIES"
           :key="cat.value"
           class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
-          :class="
-            selectedCategory === cat.value
-              ? 'bg-accent text-white'
-              : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-          "
+          :class="selectedCategory === cat.value ? 'bg-accent text-white' : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'"
           @click="selectedCategory = cat.value"
         >
           {{ cat.label }}
@@ -246,31 +209,13 @@ onMounted(loadFeeds)
           class="rounded-lg border transition-colors"
           :class="expandedFeedId === feed.id ? 'bg-bg-secondary/50' : ''"
         >
-          <!-- Feed header row -->
-          <div
-            class="flex items-center gap-2 sm:gap-4 p-3 sm:p-4 cursor-pointer hover:bg-bg-hover transition-colors rounded-lg"
-            @click="togglePreview(feed.id)"
-          >
-            <ChevronRightIcon
-              class="h-4 w-4 shrink-0 text-text-muted transition-transform"
-              :class="expandedFeedId === feed.id ? 'rotate-90' : ''"
-            />
-            <img
-              v-if="feed.favicon_url && !faviconErrors.has(feed.id)"
-              :src="feed.favicon_url"
-              alt=""
-              class="h-6 w-6 sm:h-8 sm:w-8 rounded shrink-0"
-              @error="faviconErrors.add(feed.id)"
-            />
-            <RssIcon v-else class="h-6 w-6 sm:h-8 sm:w-8 shrink-0 text-text-muted" />
+          <div class="flex items-center gap-2 sm:gap-4 p-3 sm:p-4 cursor-pointer hover:bg-bg-hover transition-colors rounded-lg" @click="togglePreview(feed.id)">
+            <ChevronRightIcon class="h-4 w-4 shrink-0 text-text-muted transition-transform" :class="expandedFeedId === feed.id ? 'rotate-90' : ''" />
+            <FeedFavicon :src="feed.favicon_url" size="md" />
 
             <div class="flex-1 min-w-0">
-              <h3 class="font-medium text-text-primary truncate">
-                {{ feed.title || feed.url }}
-              </h3>
-              <p v-if="feed.description" class="text-sm text-text-muted line-clamp-1">
-                {{ feed.description }}
-              </p>
+              <h3 class="font-medium text-text-primary truncate">{{ feed.title || feed.url }}</h3>
+              <p v-if="feed.description" class="text-sm text-text-muted line-clamp-1">{{ feed.description }}</p>
               <div class="flex items-center gap-1.5 text-xs text-text-muted whitespace-nowrap">
                 <span class="capitalize">{{ feed.category.replace('_', ' ') }}</span>
                 <span v-if="feed.subscriber_count">&middot; {{ feed.subscriber_count }} {{ feed.subscriber_count === 1 ? 'subscriber' : 'subscribers' }}</span>
@@ -279,12 +224,12 @@ onMounted(loadFeeds)
 
             <!-- Subscribed: unsubscribe button -->
             <button
-              v-if="isSubscribed(feed.id)"
+              v-if="feedStore.isSubscribed(feed.id)"
               class="btn-ghost text-xs text-success shrink-0 hover:text-danger group/sub"
               :disabled="actionLoading === feed.id"
               @click.stop="unsubscribe(feed.id)"
             >
-              <span v-if="actionLoading === feed.id" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <LoadingSpinner v-if="actionLoading === feed.id" />
               <template v-else>
                 <CheckIcon class="h-4 w-4 group-hover/sub:hidden" />
                 <span class="hidden sm:inline group-hover/sub:hidden">Subscribed</span>
@@ -292,14 +237,10 @@ onMounted(loadFeeds)
               </template>
             </button>
 
-            <!-- Not subscribed: split button — Subscribe | Add to Group -->
+            <!-- Not subscribed: split button -->
             <div v-else class="relative flex shrink-0" @click.stop>
-              <button
-                class="btn-primary text-xs rounded-r-none border-r border-white/20"
-                :disabled="actionLoading === feed.id"
-                @click="subscribe(feed.id)"
-              >
-                <span v-if="actionLoading === feed.id" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              <button class="btn-primary text-xs rounded-r-none border-r border-white/20" :disabled="actionLoading === feed.id" @click="subscribe(feed.id)">
+                <LoadingSpinner v-if="actionLoading === feed.id" class="text-white" />
                 <template v-else>
                   <PlusIcon class="h-4 w-4" />
                   <span class="hidden sm:inline">Subscribe</span>
@@ -308,6 +249,7 @@ onMounted(loadFeeds)
               <button
                 class="btn-primary text-xs rounded-l-none px-1.5"
                 :disabled="actionLoading === feed.id"
+                aria-label="Subscribe and add to group"
                 @click="groupPickerFeedId = groupPickerFeedId === feed.id ? null : feed.id"
               >
                 <ChevronDownIcon class="h-3.5 w-3.5" />
@@ -316,7 +258,7 @@ onMounted(loadFeeds)
                 v-if="groupPickerFeedId === feed.id"
                 mode="dropdown"
                 :feed-id="feed.id"
-                :subscribe-first="makeSubscriber(feed.id)"
+                :subscribe-first="subscriberFor(feed.id)"
                 class="right-0 top-full"
                 @close="groupPickerFeedId = null"
               />
@@ -325,7 +267,6 @@ onMounted(loadFeeds)
 
           <!-- Expanded preview -->
           <div v-if="expandedFeedId === feed.id" class="border-t px-4 pb-4 pt-2">
-            <!-- Loading skeleton -->
             <div v-if="previewLoading === feed.id" class="space-y-2 pl-8">
               <div v-for="i in 3" :key="i" class="animate-pulse flex items-center gap-3">
                 <div class="h-3 w-3/5 rounded bg-bg-tertiary" />
@@ -333,11 +274,10 @@ onMounted(loadFeeds)
               </div>
             </div>
 
-            <!-- Entries list -->
             <template v-else-if="previewEntries[feed.id]?.length">
               <p class="text-xs font-medium text-text-muted mb-2 pl-8">Recent entries</p>
               <ul class="space-y-1 pl-8">
-                <li v-for="(entry, i) in previewEntries[feed.id]" :key="i">
+                <li v-for="(entry, i) in previewEntries[feed.id]" :key="entry.url ?? i">
                   <a
                     v-if="entry.url"
                     :href="entry.url"
@@ -347,23 +287,21 @@ onMounted(loadFeeds)
                     @click.stop
                   >
                     <span class="text-sm text-text-primary truncate group-hover:text-accent">{{ entry.title || 'Untitled' }}</span>
-                    <span class="shrink-0 text-xs text-text-muted ml-auto">{{ previewTimeAgo(entry.published_at) }}</span>
+                    <span class="shrink-0 text-xs text-text-muted ml-auto">{{ formatTimeAgo(entry.published_at) }}</span>
                   </a>
                   <div v-else class="flex items-baseline gap-3 px-2 py-1.5 -mx-2">
                     <span class="text-sm text-text-primary truncate">{{ entry.title || 'Untitled' }}</span>
-                    <span class="shrink-0 text-xs text-text-muted ml-auto">{{ previewTimeAgo(entry.published_at) }}</span>
+                    <span class="shrink-0 text-xs text-text-muted ml-auto">{{ formatTimeAgo(entry.published_at) }}</span>
                   </div>
                 </li>
               </ul>
             </template>
 
-            <!-- No entries -->
             <p v-else class="text-xs text-text-muted pl-8">No entries yet for this feed.</p>
           </div>
         </div>
       </div>
 
-      <!-- Empty state -->
       <div v-else class="text-center py-12">
         <p class="text-text-secondary">No feeds found. Try a different search or category.</p>
       </div>

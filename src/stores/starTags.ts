@@ -4,149 +4,97 @@ import { supabase } from '@/config/supabase'
 import type { StarTag } from '@/types/models'
 import { useAuthStore } from './auth'
 
+const LS_EXPANDED = 'acta:expandedStarred'
+
 export const useStarTagStore = defineStore('starTags', () => {
-  // ---------------------------------------------------------------------------
-  // State
-  // ---------------------------------------------------------------------------
   const tags = ref<StarTag[]>([])
-  const loading = ref(false)
-  const expandedStarred = ref(
-    localStorage.getItem('acta_expanded_starred') !== 'collapsed',
-  )
+  /** Unread starred entries per tag; populated by the feed store's counts RPC. */
+  const unreadCounts = ref<Map<string, number>>(new Map())
+  const expandedStarred = ref(localStorage.getItem(LS_EXPANDED) !== 'collapsed')
 
-  // ---------------------------------------------------------------------------
-  // Getters
-  // ---------------------------------------------------------------------------
+  const sortedTags = computed(() => [...tags.value].sort((a, b) => a.position - b.position))
+  const tagMap = computed(() => new Map(tags.value.map((t) => [t.id, t])))
 
-  const sortedTags = computed(() => {
-    return [...tags.value].sort((a, b) => a.position - b.position)
-  })
-
-  const tagById = computed(() => {
-    return (id: string): StarTag | undefined => tags.value.find((t) => t.id === id)
-  })
-
-  // ---------------------------------------------------------------------------
-  // Actions
-  // ---------------------------------------------------------------------------
-
-  async function fetchTags(): Promise<void> {
-    loading.value = true
-
-    try {
-      const { data: tagRows, error: tagError } = await supabase
-        .from('star_tags')
-        .select('*')
-        .order('position', { ascending: true })
-
-      if (tagError) throw tagError
-
-      // Fetch unread counts via RPC
-      const authStore = useAuthStore()
-      const { data: unreadData, error: unreadError } = await supabase.rpc(
-        'get_star_tag_unread_counts',
-        { p_user_id: authStore.user!.id },
-      )
-
-      const unreadMap = new Map<string, number>()
-      if (!unreadError && unreadData) {
-        for (const row of unreadData as { star_tag_id: string; unread_count: number }[]) {
-          unreadMap.set(row.star_tag_id, row.unread_count)
-        }
-      }
-
-      tags.value = ((tagRows ?? []) as StarTag[]).map((t) => ({
-        ...t,
-        unread_count: unreadMap.get(t.id) ?? 0,
-      }))
-    } catch (err: unknown) {
-      console.error('Failed to fetch star tags:', err)
-    } finally {
-      loading.value = false
-    }
+  function tagById(id: string): StarTag | undefined {
+    return tagMap.value.get(id)
   }
 
-  async function createTag(name: string): Promise<StarTag | null> {
-    try {
-      const authStore = useAuthStore()
-      const position = tags.value.length
-      const { data, error: insertError } = await supabase
-        .from('star_tags')
-        .insert({ user_id: authStore.user!.id, name, position })
-        .select()
-        .single()
+  function unreadFor(tagId: string): number {
+    return unreadCounts.value.get(tagId) ?? 0
+  }
 
-      if (insertError) throw insertError
+  async function fetchTags(): Promise<void> {
+    const { data, error } = await supabase
+      .from('star_tags')
+      .select('id, user_id, name, position, created_at, updated_at')
+      .order('position', { ascending: true })
+    if (error) throw error
+    tags.value = (data ?? []) as StarTag[]
+  }
 
-      const newTag = { ...(data as StarTag), unread_count: 0 }
-      tags.value.push(newTag)
-      return newTag
-    } catch (err: unknown) {
-      console.error('Failed to create star tag:', err)
-      return null
-    }
+  async function createTag(name: string): Promise<StarTag> {
+    const { data, error } = await supabase
+      .from('star_tags')
+      .insert({ user_id: useAuthStore().user!.id, name, position: tags.value.length })
+      .select()
+      .single()
+    if (error) throw error
+    const tag = data as StarTag
+    tags.value.push(tag)
+    return tag
   }
 
   async function renameTag(id: string, name: string): Promise<void> {
-    try {
-      const { error: updateError } = await supabase
-        .from('star_tags')
-        .update({ name, updated_at: new Date().toISOString() })
-        .eq('id', id)
-
-      if (updateError) throw updateError
-
-      const tag = tags.value.find((t) => t.id === id)
-      if (tag) tag.name = name
-    } catch (err: unknown) {
-      console.error('Failed to rename star tag:', err)
-    }
+    const { error } = await supabase.from('star_tags').update({ name }).eq('id', id)
+    if (error) throw error
+    const tag = tagMap.value.get(id)
+    if (tag) tag.name = name
   }
 
   async function deleteTag(id: string): Promise<void> {
-    try {
-      const { error: deleteError } = await supabase
-        .from('star_tags')
-        .delete()
-        .eq('id', id)
-
-      if (deleteError) throw deleteError
-
-      tags.value = tags.value.filter((t) => t.id !== id)
-    } catch (err: unknown) {
-      console.error('Failed to delete star tag:', err)
-    }
+    const { error } = await supabase.from('star_tags').delete().eq('id', id)
+    if (error) throw error
+    tags.value = tags.value.filter((t) => t.id !== id)
+    unreadCounts.value.delete(id)
   }
 
   function toggleStarred(): void {
     expandedStarred.value = !expandedStarred.value
-    localStorage.setItem(
-      'acta_expanded_starred',
-      expandedStarred.value ? 'open' : 'collapsed',
-    )
+    localStorage.setItem(LS_EXPANDED, expandedStarred.value ? 'open' : 'collapsed')
   }
 
-  function updateUnreadCount(tagId: string, delta: number): void {
-    const tag = tags.value.find((t) => t.id === tagId)
-    if (tag) {
-      tag.unread_count = Math.max(0, (tag.unread_count ?? 0) + delta)
-    }
+  function setUnreadCounts(rows: { star_tag_id: string; unread_count: number }[]): void {
+    unreadCounts.value = new Map(rows.map((r) => [r.star_tag_id, r.unread_count]))
+  }
+
+  function setUnreadCount(tagId: string, count: number): void {
+    unreadCounts.value.set(tagId, Math.max(0, count))
+  }
+
+  function adjustUnread(tagId: string, delta: number): void {
+    setUnreadCount(tagId, unreadFor(tagId) + delta)
+  }
+
+  function reset(): void {
+    tags.value = []
+    unreadCounts.value = new Map()
   }
 
   return {
-    // State
     tags,
-    loading,
+    unreadCounts,
     expandedStarred,
-    // Getters
     sortedTags,
     tagById,
-    // Actions
+    unreadFor,
     fetchTags,
     createTag,
     renameTag,
     deleteTag,
     toggleStarred,
-    updateUnreadCount,
+    setUnreadCounts,
+    setUnreadCount,
+    adjustUnread,
+    reset,
   }
 })

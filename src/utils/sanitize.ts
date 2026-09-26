@@ -20,56 +20,45 @@ const ALLOWED_IFRAME_HOSTS = [
 function isAllowedIframeHost(src: string): boolean {
   try {
     const host = new URL(src).hostname
-    return ALLOWED_IFRAME_HOSTS.some(
-      (d) => host === d || host.endsWith('.' + d),
-    )
+    return ALLOWED_IFRAME_HOSTS.some((d) => host === d || host.endsWith('.' + d))
   } catch {
     return false
   }
 }
 
-// Register a hook once to filter iframes by origin
+/** Set per `sanitizeHtml` call; DOMPurify hooks are global. */
+let linksInNewTab = true
+
 DOMPurify.addHook('uponSanitizeElement', (node) => {
   const el = node as Element
   if (el.tagName === 'IFRAME') {
     const src = el.getAttribute('src') || ''
-    if (!isAllowedIframeHost(src)) {
-      node.parentNode?.removeChild(node)
-    }
+    if (!isAllowedIframeHost(src)) node.parentNode?.removeChild(node)
   }
 })
 
-// Force all links in feed content to open in a new tab
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-  if (node.tagName === 'A' && (node as Element).hasAttribute('href')) {
-    ;(node as Element).setAttribute('target', '_blank')
-    ;(node as Element).setAttribute('rel', 'noopener noreferrer')
+  const el = node as Element
+  if (el.tagName === 'A' && el.hasAttribute('href')) {
+    if (linksInNewTab) el.setAttribute('target', '_blank')
+    else el.removeAttribute('target')
+    el.setAttribute('rel', 'noopener noreferrer')
+  }
+  // Defer offscreen images and iframes inside article bodies.
+  if (el.tagName === 'IMG' || el.tagName === 'IFRAME') {
+    if (!el.hasAttribute('loading')) el.setAttribute('loading', 'lazy')
   }
 })
 
 const SANITIZE_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
   ADD_TAGS: ['iframe'],
-  ADD_ATTR: [
-    'allow',
-    'allowfullscreen',
-    'frameborder',
-    'scrolling',
-    'target',
-    'srcset',
-    'sizes',
-    'loading',
-  ],
+  ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target', 'srcset', 'sizes', 'loading'],
   FORBID_ATTR: ['style'],
 }
 
-export function sanitizeHtml(html: string): string {
+export function sanitizeHtml(html: string, options: { newTab?: boolean } = {}): string {
+  linksInNewTab = options.newTab ?? true
   return DOMPurify.sanitize(html, SANITIZE_CONFIG) as string
 }
 
-/**
- * Strip XML/HTML tags from author names.
- * e.g. `<author id="817">Sportsnet Video` → `Sportsnet Video`
- */
-export function cleanAuthor(author: string): string {
-  return author.replace(/<[^>]*>/g, '').trim()
-}
+export { cleanAuthor } from './html'

@@ -10,24 +10,7 @@ export interface UserProfile {
   updated_at: string
 }
 
-export interface UserSettings {
-  user_id: string
-  theme: 'light' | 'dark' | 'system'
-  custom_theme: string
-  display_mode: 'comfortable' | 'compact' | 'feed'
-  entries_per_page: number
-  mark_read_on_scroll: boolean
-  show_images: boolean
-  show_archive_links: boolean
-  open_links_in_new_tab: boolean
-  notify_new_entries: boolean
-  notify_email: boolean
-  default_sort_order: 'newest_first' | 'oldest_first'
-  pagination_mode: 'infinite' | 'paginated'
-  show_unread_only: boolean
-  font_size: string
-}
-
+/** Full `feeds` row, as used by Discover and Admin. */
 export interface Feed {
   id: string
   url: string
@@ -51,21 +34,15 @@ export interface Feed {
   updated_at: string
 }
 
-export interface Subscription {
-  id: string
-  user_id: string
-  feed_id: string
-  custom_title: string | null
-  notify: boolean
-  created_at: string
-}
-
-export interface SubscribedFeed extends Feed {
+/** The columns the sidebar needs, joined with the user's subscription row. */
+export type SubscribedFeed = Pick<
+  Feed,
+  'id' | 'url' | 'title' | 'description' | 'site_url' | 'favicon_url' | 'category' | 'status' | 'last_fetched_at' | 'last_error_message'
+> & {
   subscription_id: string
   custom_title: string | null
   notify: boolean
   unread_count: number
-  is_favorite: boolean
 }
 
 export interface Group {
@@ -76,21 +53,12 @@ export interface Group {
   position: number
   created_at: string
   updated_at: string
-  unread_count?: number
 }
 
-export interface GroupFeed {
-  id: string
-  group_id: string
-  feed_id: string
-  position: number
-  created_at: string
-}
-
+/** One row from the entry list RPCs plus fields the client derives once on arrival. */
 export interface Entry {
   id: string
   feed_id: string
-  guid: string | null
   url: string | null
   title: string | null
   author: string | null
@@ -103,29 +71,22 @@ export interface Entry {
   star_tag_id: string | null
   feed_title?: string | null
   feed_favicon_url?: string | null
+  /** HTML-stripped body, computed client-side; used for excerpts and keyword filters. */
+  plain_text: string
+  /** Up to 500 chars of summary (or body) for list rows. */
+  excerpt: string
 }
 
-export interface EntryFilter {
-  type: 'all' | 'starred' | 'feed' | 'group' | 'category' | 'search' | 'star_tag'
-  feedId?: string
-  groupId?: string
-  category?: string
-  query?: string
-  scope?: 'subscribed' | 'all'
-  starTagId?: string
-  unreadOnly: boolean
-}
+export type EntryFilter =
+  | { type: 'all'; unreadOnly: boolean }
+  | { type: 'feed'; feedId: string; unreadOnly: boolean }
+  | { type: 'group'; groupId: string; unreadOnly: boolean }
+  | { type: 'category'; category: string; unreadOnly: boolean }
+  | { type: 'starred'; unreadOnly: false }
+  | { type: 'star_tag'; starTagId: string; unreadOnly: false }
+  | { type: 'search'; query: string; scope: 'subscribed' | 'all'; unreadOnly: false }
 
-export interface DiscoverFeed {
-  id: string
-  url: string
-  title: string | null
-  description: string | null
-  site_url: string | null
-  favicon_url: string | null
-  category: string
-  subscriber_count: number
-}
+export type EntryFilterType = EntryFilter['type']
 
 export interface ContentFilter {
   id: string
@@ -147,7 +108,6 @@ export interface StarTag {
   position: number
   created_at: string
   updated_at: string
-  unread_count?: number
 }
 
 export interface Toast {

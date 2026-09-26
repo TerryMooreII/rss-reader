@@ -53,7 +53,9 @@ function navigateToSearch() {
   const query = ui.searchQuery.trim()
   if (!query) return
 
-  router.push({
+  // Typing refines the current search rather than stacking history entries.
+  const navigate = route.name === 'search-entries' ? router.replace : router.push
+  navigate({
     name: 'search-entries',
     query: { q: query, scope: ui.searchScope },
   })
