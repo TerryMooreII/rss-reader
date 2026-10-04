@@ -47,7 +47,8 @@ export const useEntryStore = defineStore('entries', () => {
   // ---------------------------------------------------------------------------
   const entries = ref<Entry[]>([])
   const selectedEntryId = ref<string | null>(null)
-  const loading = ref(false)
+  // Starts true so the list shows its skeleton (not "No entries found") during boot.
+  const loading = ref(true)
   const loadingMore = ref(false)
   const hasMore = ref(false)
   const filter = ref<EntryFilter>({ type: 'all', unreadOnly: false })
@@ -480,6 +481,11 @@ export const useEntryStore = defineStore('entries', () => {
   // ---------------------------------------------------------------------------
   // Auto rules for entries that arrive on the client
   // ---------------------------------------------------------------------------
+  /** Run mark-read / auto-star rules over the loaded list (used when rules load after the list). */
+  function reapplyAutoFilters(): void {
+    _autoApplyFilters(entries.value)
+  }
+
   function _autoApplyFilters(rows: Entry[]): void {
     const { markReadRules, autoStarRules } = useFilterStore()
     if (markReadRules.length === 0 && autoStarRules.length === 0) return
@@ -527,6 +533,7 @@ export const useEntryStore = defineStore('entries', () => {
   function reset(): void {
     fetchSeq++
     entries.value = []
+    loading.value = true
     selectedEntryId.value = null
     filter.value = { type: 'all', unreadOnly: false }
     error.value = null
@@ -558,6 +565,7 @@ export const useEntryStore = defineStore('entries', () => {
     fetchEntries,
     setUnreadOnly,
     refresh,
+    reapplyAutoFilters,
     fetchMore,
     fetchPage,
     silentRefresh,

@@ -70,11 +70,14 @@ const title = computed(() => {
   }
 })
 
-// Fetch once the sidebar data and settings are in, then on every filter change
-// (route params, search query, or the unread toggle from settings sync).
+// Fetch straight away (auth is guaranteed by the route guard) and on every
+// filter change: route params, search query, or the unread toggle. The first
+// request uses the locally cached settings so it runs alongside the sidebar
+// loads instead of after them; if the settings sync changes `unreadOnly`, the
+// serialized filter changes and we refetch (stale responses are dropped).
 watch(
-  [ready, () => JSON.stringify(filter.value)],
-  ([isReady]) => {
+  () => JSON.stringify(filter.value),
+  () => {
     const f = filter.value
     if (f?.type === 'search') {
       // Keep the search bar in sync with the URL (back/forward, shared links).
@@ -82,10 +85,16 @@ watch(
       ui.searchScope = f.scope
       ui.openSearch()
     }
-    if (isReady && f) entryStore.fetchEntries(f)
+    if (f) entryStore.fetchEntries(f)
+    else entryStore.loading = false // e.g. search route with no query: show the empty state
   },
   { immediate: true },
 )
+
+// Content-filter rules may arrive after the first page did; apply them to it.
+watch(ready, (isReady) => {
+  if (isReady) entryStore.reapplyAutoFilters()
+})
 </script>
 
 <template>

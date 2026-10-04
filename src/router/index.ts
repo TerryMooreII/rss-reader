@@ -1,7 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { authGuard } from './guards'
-
-const EntryListPage = () => import('@/pages/EntryListPage.vue')
+// The authenticated shell and the entry list are needed on every signed-in load,
+// so they ship in the main bundle rather than as lazy chunks fetched after auth.
+import AppLayout from '@/components/layout/AppLayout.vue'
+import EntryListPage from '@/pages/EntryListPage.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -52,7 +54,7 @@ const router = createRouter({
     // Authenticated App
     {
       path: '/app',
-      component: () => import('@/components/layout/AppLayout.vue'),
+      component: AppLayout,
       meta: { requiresAuth: true },
       redirect: { name: 'all-entries' },
       children: [

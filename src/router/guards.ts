@@ -17,7 +17,10 @@ export const authGuard: NavigationGuardWithThis<undefined> = async (to) => {
     return { name: 'all-entries' }
   }
 
-  if (to.meta.requiresAdmin && !auth.isAdmin) {
-    return { name: 'all-entries' }
+  if (to.meta.requiresAdmin) {
+    // The role lives on the profile, which loads in the background after the
+    // session is restored. Only admin routes need to wait for it.
+    await auth.untilProfileReady()
+    if (!auth.isAdmin) return { name: 'all-entries' }
   }
 }

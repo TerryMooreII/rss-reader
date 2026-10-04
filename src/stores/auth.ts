@@ -36,12 +36,17 @@ export const useAuthStore = defineStore('auth', () => {
   // backgrounded tab). Other stores/components can watch this to re-fetch data.
   const tokenRefreshCount = ref(0)
 
-  // Promise that resolves once initialize() has completed.
+  // Promise that resolves once initialize() has restored the session.
   // The router guard awaits this to avoid race conditions.
   let _resolveInit!: () => void
   const initPromise = new Promise<void>((resolve) => {
     _resolveInit = resolve
   })
+
+  // The profile fetch kicked off by initialize(). Routing does not wait for it
+  // (only admin routes need the role), so the entry list can load a round trip
+  // sooner. The admin guard awaits this instead.
+  let profilePromise: Promise<void> = Promise.resolve()
 
   // ---------------------------------------------------------------------------
   // Getters
@@ -80,7 +85,8 @@ export const useAuthStore = defineStore('auth', () => {
       if (data.session) {
         session.value = data.session
         user.value = data.session.user
-        await fetchProfile()
+        // Not awaited: isAdmin/displayName are reactive and fill in when it lands.
+        profilePromise = fetchProfile()
       }
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to initialize auth'
@@ -123,11 +129,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Returns a promise that resolves once initialize() has finished.
+   * Returns a promise that resolves once initialize() has restored the session.
    * Used by the router guard to wait for session restoration.
    */
   function untilReady(): Promise<void> {
     return initPromise
+  }
+
+  /** Resolves once the profile started by initialize() has loaded (or failed). */
+  function untilProfileReady(): Promise<void> {
+    return profilePromise
   }
 
   /**
@@ -295,6 +306,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Actions
     initialize,
     untilReady,
+    untilProfileReady,
     login,
     register,
     logout,
