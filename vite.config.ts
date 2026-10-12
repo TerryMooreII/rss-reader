@@ -7,7 +7,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: '/rss-reader/',
+  base: '/',
   plugins: [
     vue(),
     vueJsx(),
@@ -22,8 +22,8 @@ export default defineConfig({
         theme_color: '#3b82f6',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/rss-reader/app/all',
-        scope: '/rss-reader/',
+        start_url: '/app/all',
+        scope: '/',
         icons: [
           {
             src: 'pwa-192x192.png',
